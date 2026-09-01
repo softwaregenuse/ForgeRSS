@@ -5,7 +5,7 @@
 <link>https://www.anthropic.com/news</link>
 <description>Latest news and updates from Anthropic</description>
 <language>en</language>
-<lastBuildDate>Tue, 01 Sep 2026 11:15:34 +0000</lastBuildDate>
+<lastBuildDate>Tue, 01 Sep 2026 16:13:18 +0000</lastBuildDate>
 <generator>ForgeRSS</generator>
 <atom:link href="https://www.anthropic.com/news" rel="self" type="application/rss+xml"/>
 <image>
@@ -97,7 +97,7 @@ Below we discuss our efforts, going back to several months before the incidents,
 
 We have historically been concerned about RL training environments that incentivize cheating, and have taken various measures to filter out or fix such environments.
 
-In February, we rolled back three days of training on the Mythos Preview reinforcement learning run after seeing signs of reward-hacking (when a model finds ways to fool its training process and earn rewards without completing the assigned task). We noticed the model writing notes to “the reviewer” in its code comments and replies, including on tasks where no reviewer had ever been mentioned—an undesirable generalization from environments where the prompt did include a reviewer. It also kept gaming a reward intended to incentivize honesty by piling on disclaimers or caveats.5Rolling back the three days let us resume training from a checkpoint before this behavior had been learned, and we made changes to the environments to prevent the model learning them again.
+In February, we rolled back three days of training on the Mythos Preview reinforcement learning run after seeing signs of reward hacking (when a model finds ways to fool its training process and earn rewards without completing the assigned task). We noticed the model writing notes to “the reviewer” in its code comments and replies, including on tasks where no reviewer had ever been mentioned—an undesirable generalization from environments where the prompt did include a reviewer. It also kept gaming a reward intended to incentivize honesty by piling on disclaimers or caveats.5Rolling back the three days let us resume training from a checkpoint before this behavior had been learned, and we made changes to the environments to prevent the model learning them again.
 
 We have been building tools for monitoring undesirable behaviors models learn in RL since Claude Sonnet 3.7 (which had a propensity to reward hack that we did not detect until late in training). We put significant effort into making sure our tooling evolved with each model generation, from a handful of classifiers to an automated review of all environments before and during training runs, but by spring 2026 that system was under strain. We were producing RL environments at a more rapid pace than ever, faster than our systems could vet them. Flagged environments required a human to adjudicate, and reward hacks and misconfigurations started outpacing our ability to filter or fix them.
 
@@ -157,7 +157,7 @@ None of these findings came from our internal dedicated offensive-cyber evaluati
 
 High-risk cyber evaluations include those where Claude is given an ambiguously scoped, offensive task, like penetration testing.
 
-Ultimately, a model that acts outside its intended scope on such a challenge is a problem of alignment; an aligned model should stop or report to humans that the task can’t be completed as specified. We are continuing to train this behavior directly, but a defense in depth approach means not relying on alignment alone.
+Ultimately, a model that acts outside its intended scope on such a challenge is a problem of alignment; an aligned model should stop or report to humans that the task can’t be completed as specified. We are continuing to train this behavior directly, but a defense-in-depth approach means not relying on alignment alone.
 
 We’ve publicly discussed two other categories of reward hacking in theMythos Preview system card, including one where the model utilizes low-level computer process data in order to escalate its permissions, and another where it circumvents network restrictions in its training environment to download data that lets it shortcut the assigned task.
 
@@ -252,7 +252,7 @@ Below we discuss our efforts, going back to several months before the incidents,
 
 We have historically been concerned about RL training environments that incentivize cheating, and have taken various measures to filter out or fix such environments.
 
-In February, we rolled back three days of training on the Mythos Preview reinforcement learning run after seeing signs of reward-hacking (when a model finds ways to fool its training process and earn rewards without completing the assigned task). We noticed the model writing notes to “the reviewer” in its code comments and replies, including on tasks where no reviewer had ever been mentioned—an undesirable generalization from environments where the prompt did include a reviewer. It also kept gaming a reward intended to incentivize honesty by piling on disclaimers or caveats.5Rolling back the three days let us resume training from a checkpoint before this behavior had been learned, and we made changes to the environments to prevent the model learning them again.
+In February, we rolled back three days of training on the Mythos Preview reinforcement learning run after seeing signs of reward hacking (when a model finds ways to fool its training process and earn rewards without completing the assigned task). We noticed the model writing notes to “the reviewer” in its code comments and replies, including on tasks where no reviewer had ever been mentioned—an undesirable generalization from environments where the prompt did include a reviewer. It also kept gaming a reward intended to incentivize honesty by piling on disclaimers or caveats.5Rolling back the three days let us resume training from a checkpoint before this behavior had been learned, and we made changes to the environments to prevent the model learning them again.
 
 We have been building tools for monitoring undesirable behaviors models learn in RL since Claude Sonnet 3.7 (which had a propensity to reward hack that we did not detect until late in training). We put significant effort into making sure our tooling evolved with each model generation, from a handful of classifiers to an automated review of all environments before and during training runs, but by spring 2026 that system was under strain. We were producing RL environments at a more rapid pace than ever, faster than our systems could vet them. Flagged environments required a human to adjudicate, and reward hacks and misconfigurations started outpacing our ability to filter or fix them.
 
@@ -312,7 +312,7 @@ None of these findings came from our internal dedicated offensive-cyber evaluati
 
 High-risk cyber evaluations include those where Claude is given an ambiguously scoped, offensive task, like penetration testing.
 
-Ultimately, a model that acts outside its intended scope on such a challenge is a problem of alignment; an aligned model should stop or report to humans that the task can’t be completed as specified. We are continuing to train this behavior directly, but a defense in depth approach means not relying on alignment alone.
+Ultimately, a model that acts outside its intended scope on such a challenge is a problem of alignment; an aligned model should stop or report to humans that the task can’t be completed as specified. We are continuing to train this behavior directly, but a defense-in-depth approach means not relying on alignment alone.
 
 We’ve publicly discussed two other categories of reward hacking in theMythos Preview system card, including one where the model utilizes low-level computer process data in order to escalate its permissions, and another where it circumvents network restrictions in its training environment to download data that lets it shortcut the assigned task.
 
@@ -418,6 +418,8 @@ We thank everyone who has contributed to this work so far, including, but not li
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Expanding our support for scientists
 
 Starting today, 10,000 scientists around the world can get Claude at no cost to start. Verified principal investigators qualify for a Claude Team subscription plan and then add their research team to Standard seats for free, or Premium seats for $15 per month, for up to a year.
@@ -507,6 +509,8 @@ We thank everyone who has contributed to this work so far, including, but not li
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Expanding our support for scientists
 
 Starting today, 10,000 scientists around the world can get Claude at no cost to start. Verified principal investigators qualify for a Claude Team subscription plan and then add their research team to Standard seats for free, or Premium seats for $15 per month, for up to a year.
@@ -541,6 +545,8 @@ For now, researchers working in biology and chemistry will still be limited to o
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -567,6 +573,8 @@ As your lab makes use of your allotted credits and requires more usage than stan
 For now, researchers working in biology and chemistry will still be limited to our Opus-class models. Claude Fable models willcontinue to blockprofessional biology and drug development queries because of their potential dual-use risks. We’re working in partnership with the US government to establish an access program for life sciences professionals to use Mythos-class models for life sciences research and development. We have now enrolled our first participants, and we expect to share more and increase access soon.
 
 Improving our alignment and security efforts
+
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
 
 Previewing the Model Hardware Standard
 
@@ -614,6 +622,8 @@ To learn more about the grant program and apply,see our application form. For mo
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -652,6 +662,8 @@ Validate their graders against real subject-matter experts.
 To learn more about the grant program and apply,see our application form. For more on building strong wellbeing evaluations and benchmarks,read our guidance. Applications are due by September 21; applicants who are selected to submit full proposals will be notified by October 5.
 
 Improving our alignment and security efforts
+
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
 
 Previewing the Model Hardware Standard
 
@@ -779,6 +791,8 @@ Pi is technically predictable, but any run of digits from somewhere in the middl
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -898,6 +912,8 @@ Pi is technically predictable, but any run of digits from somewhere in the middl
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -956,6 +972,8 @@ We hope you’ll continue to share your feedback with us so we can improve our s
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1007,6 +1025,8 @@ We hope you’ll continue to share your feedback with us so we can improve our s
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1039,6 +1059,8 @@ Tino arrives at a pivotal moment for Anthropic's work with governments around th
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1063,6 +1085,8 @@ Tino has served as a Trustee of Anthropic's Long-Term Benefit Trust since Januar
 Tino arrives at a pivotal moment for Anthropic's work with governments around the world. The questions AI raises for economies, for security, and for communities absorbing rapid change are being debated by leaders everywhere. Ensuring AI’s trajectory is shaped by democratic societies and its benefits reach people broadly is a critical priority. Tino will help steer this work while finding common cause with heads of state and policy leaders on the questions and possibilities AI is raising for communities everywhere.
 
 Improving our alignment and security efforts
+
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
 
 Previewing the Model Hardware Standard
 
@@ -1186,6 +1210,8 @@ We generally store traces for benchmark evaluations. We have carefully audited t
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1301,6 +1327,8 @@ We generally store traces for benchmark evaluations. We have carefully audited t
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1355,6 +1383,8 @@ SeeSection 2 ofThe Adolescence of Technologyfor a more detailed discussion of bi
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1402,6 +1432,8 @@ SeeSection 2 ofThe Adolescence of Technologyfor a more detailed discussion of bi
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1448,6 +1480,8 @@ To learn more about the Claude Partner Network, visitanthropic.com/partners.
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1486,6 +1520,8 @@ A risk-navigation tool that has helped underwriters evaluate accounts, which onc
 To learn more about the Claude Partner Network, visitanthropic.com/partners.
 
 Improving our alignment and security efforts
+
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
 
 Previewing the Model Hardware Standard
 
@@ -1583,6 +1619,8 @@ Frontier-Bench v0.1, Effort plot:These results are from an internal run of Front
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1672,6 +1710,8 @@ Frontier-Bench v0.1, Effort plot:These results are from an internal run of Front
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1734,6 +1774,8 @@ OSWorld-Verified:We made changes to how we run the OSWorld-Verified evaluation t
 
 Improving our alignment and security efforts
 
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
+
 Previewing the Model Hardware Standard
 
 We’re opening a research preview of the Model Hardware Standard (MHS), a shared specification for AI agents to safely operate physical devices, to a first group of scientific research labs and advanced manufacturers.
@@ -1788,6 +1830,8 @@ Humanity’s Last Exam:We updated the grader model for Humanity’s Last Exam an
 OSWorld-Verified:We made changes to how we run the OSWorld-Verified evaluation to more accurately reflect the model’s performance in the real world, and have updated the Sonnet 4.6 score to 78.5%. This is the reason the score differs from that reported in theSonnet 4.6 launch blog.
 
 Improving our alignment and security efforts
+
+On July 30, we reported three incidents in which Claude models gained unauthorized access to real computer systems. We are conducting an in-depth analysis of both incidents, and planning to work with METR for an independent review. In the meantime, we’re sharing some of the changes we’ve made over the past month.
 
 Previewing the Model Hardware Standard
 
