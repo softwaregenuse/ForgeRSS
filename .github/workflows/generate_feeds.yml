@@ -1,49 +1,29 @@
-# Generate RSS feeds on schedule
-# Default: every 6 hours, configurable via repository variables
-
-name: Generate Feeds
+name: Generate Xueqiu Feed
 
 on:
   schedule:
-    # Default: every 6 hours (0:00, 6:00, 12:00, 18:00 UTC)
-    # Can be overridden by setting CRON_SCHEDULE repository variable
-    - cron: '0 */6 * * *'
+    # 每 4 小时运行一次
+    - cron: '0 */4 * * *'
+
   workflow_dispatch:
     inputs:
-      full_refresh:
-        description: 'Full refresh (ignore cache)'
+      max_posts:
+        description: 'Max posts in feed'
         required: false
-        default: 'false'
-        type: boolean
-      max_articles:
-        description: 'Max articles per feed'
-        required: false
-        default: '50'
+        default: '20'
         type: string
 
+permissions:
+  contents: write
+
 env:
-  MAX_ARTICLES: ${{ vars.MAX_ARTICLES || '50' }}
-  LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
-  # CNInfo: CI 跑全市场最新公告，关掉 PDF 下载（CI 不持久化 downloads/，下了也丢弃）
-  CNINFO_DOWNLOAD_PDF: 'false'
-  CNINFO_MAX_ITEMS: '30'
-  # Xiaoyuzhou: 默认订阅一个示例播客作为 CI demo（用户 fork 后可改）
-  # 这里用「除你武器」(pid=63b7c6697dcc05cd33b51cd5)。仅 RSS 元数据追新，
-  # 不下载 mp3（CI 不持久化 downloads/）。Fork 后改成你自己关心的播客即可。
-  XIAOYUZHOU_PODCAST_ID: ${{ vars.XIAOYUZHOU_PODCAST_ID || '63b7c6697dcc05cd33b51cd5' }}
-  XIAOYUZHOU_DOWNLOAD_AUDIO: 'false'
-  # Xueqiu: 默认订阅一个示例账号作为 CI demo（用户 fork 后可改）
-  # 这里用「证券日报」(uid=8353550788) — 机构号高频更新，适合验证抓取健康。
-  # 无需登录，DrissionPage headless 直接过 Aliyun WAF。
-  XUEQIU_USER_ID: ${{ vars.XUEQIU_USER_ID || '8353550788' }}
-  XUEQIU_MAX_POSTS: '20'
+  XUEQIU_USER_ID: ${{ vars.XUEQIU_USER_ID }}
+  XUEQIU_MAX_POSTS: ${{ github.event.inputs.max_posts || '20' }}
 
 jobs:
   generate:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,23 +36,29 @@ jobs:
 
       - name: Install Chrome
         run: |
-          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub \
+            | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg
+
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+            | sudo tee /etc/apt/sources.list.d/google-chrome.list
+
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run feed generators
-        env:
-          MAX_ARTICLES: ${{ github.event.inputs.max_articles || env.MAX_ARTICLES }}
+      - name: Generate Xueqiu RSS
         run: |
-          if [ "${{ github.event.inputs.full_refresh }}" = "true" ]; then
-            python scripts/run_all.py --full --max $MAX_ARTICLES --exclude-docs
-          else
-            python scripts/run_all.py --max $MAX_ARTICLES --exclude-docs
+          if [ -z "$XUEQIU_USER_ID" ]; then
+            echo "XUEQIU_USER_ID is not configured"
+            exit 1
           fi
+
+          echo "Generating Xueqiu RSS for: $XUEQIU_USER_ID"
+
+          python scripts/run_single.py xueqiu_user \
+            --max "$XUEQIU_MAX_POSTS"
 
       - name: Validate feeds
         run: python scripts/validate_feeds.py
@@ -81,12 +67,12 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          
-          git add feeds/*.xml
-          
+
+          git add feeds/feed_xueqiu_user.xml cache/
+
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update RSS feeds [skip ci]"
+            git commit -m "Update Xueqiu RSS [skip ci]"
             git push
           fi
