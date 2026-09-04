@@ -1,4 +1,4 @@
-name: Generate Xueqiu Feed
+name: Generate Xueqiu Feeds
 
 on:
   schedule:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       max_posts:
-        description: 'Max posts in feed'
+        description: 'Max posts per user'
         required: false
         default: '20'
         type: string
@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 env:
-  XUEQIU_USER_ID: ${{ vars.XUEQIU_USER_ID }}
+  XUEQIU_USERS: ${{ vars.XUEQIU_USER_ID }}
   XUEQIU_MAX_POSTS: ${{ github.event.inputs.max_posts || '20' }}
 
 jobs:
@@ -48,17 +48,39 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Generate Xueqiu RSS
+      - name: Generate separate Xueqiu feeds
         run: |
-          if [ -z "$XUEQIU_USER_ID" ]; then
+          if [ -z "$XUEQIU_USERS" ]; then
             echo "XUEQIU_USER_ID is not configured"
             exit 1
           fi
 
-          echo "Generating Xueqiu RSS for: $XUEQIU_USER_ID"
+          IFS=',' read -ra USERS <<< "$XUEQIU_USERS"
 
-          python scripts/run_single.py xueqiu_user \
-            --max "$XUEQIU_MAX_POSTS"
+          for UID_VALUE in "${USERS[@]}"; do
+            UID_VALUE="$(echo "$UID_VALUE" | xargs)"
+
+            if [ -z "$UID_VALUE" ]; then
+              continue
+            fi
+
+            echo "========================================"
+            echo "Generating Xueqiu RSS for UID: $UID_VALUE"
+            echo "========================================"
+
+            export XUEQIU_USER_ID="$UID_VALUE"
+
+            python scripts/run_single.py xueqiu_user \
+              --max "$XUEQIU_MAX_POSTS"
+
+            if [ ! -f "feeds/feed_xueqiu_user.xml" ]; then
+              echo "Feed file was not generated for $UID_VALUE"
+              exit 1
+            fi
+
+            mv "feeds/feed_xueqiu_user.xml" \
+               "feeds/xueqiu_${UID_VALUE}.xml"
+          done
 
       - name: Validate feeds
         run: python scripts/validate_feeds.py
@@ -68,11 +90,11 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-          git add feeds/feed_xueqiu_user.xml cache/
+          git add feeds/ cache/
 
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update Xueqiu RSS [skip ci]"
+            git commit -m "Update Xueqiu RSS feeds [skip ci]"
             git push
           fi
