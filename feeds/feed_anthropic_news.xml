@@ -5,7 +5,7 @@
 <link>https://www.anthropic.com/news</link>
 <description>Latest news and updates from Anthropic</description>
 <language>en</language>
-<lastBuildDate>Fri, 04 Sep 2026 03:11:55 +0000</lastBuildDate>
+<lastBuildDate>Fri, 04 Sep 2026 10:46:50 +0000</lastBuildDate>
 <generator>ForgeRSS</generator>
 <atom:link href="https://www.anthropic.com/news" rel="self" type="application/rss+xml"/>
 <image>
@@ -1206,7 +1206,7 @@ We’re opening a research preview of the Model Hardware Standard (MHS), a share
   <link>https://www.anthropic.com/news/investigating-incidents-cybersecurity-evals</link>
   <guid isPermaLink="false">https://www.anthropic.com/news/investigating-incidents-cybersecurity-evals</guid>
   <pubDate>Thu, 30 Jul 2026 00:00:00 +0000</pubDate>
-  <category>News</category>
+  <category>Announcements</category>
   <description><![CDATA[<p style="color:#666;font-size:14px;margin-bottom:16px">In a review of our cybersecurity evaluation transcripts, we found three incidents in which a Claude model reached the internet from within or while interacting with a third-party evaluation environment, and then gained unauthorized access to the real systems of three different organizations.
 
 Below we describe what happened, how it happened, and what we’re changing. We encourage other AI labs to perform similar reviews. This post reflects our current understanding; we&apos;ll update it if any details...</p><div style="font-size:16px;line-height:1.8;color:#333">In a review of our cybersecurity evaluation transcripts, we found three incidents in which a Claude model reached the internet from within or while interacting with a third-party evaluation environment, and then gained unauthorized access to the real systems of three different organizations.
