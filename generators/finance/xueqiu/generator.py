@@ -283,19 +283,7 @@ class XueqiuUserGenerator(BaseFeedGenerator):
         ChromiumOptions,
     ) -> list[Article]:
         co = ChromiumOptions()
-        co.set_browser_path("/usr/bin/google-chrome")
-        co.auto_port()
-        # 明确使用新版无头模式
-        co.set_argument("--headless=new")
-     
-        co.set_argument("--no-sandbox")
-        co.set_argument("--disable-dev-shm-usage")
-        co.set_argument("--disable-gpu")
-        co.set_argument("--window-size=1920,1080")
-        co.set_argument("--disable-blink-features=AutomationControlled")
-        co.set_argument("--lang=zh-CN")
-
-
+        co.set_address("127.0.0.1:9222")
 
         page = None
         try:
