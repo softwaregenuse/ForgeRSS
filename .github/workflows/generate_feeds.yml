@@ -6,7 +6,7 @@ on:
     - cron: '0 */4 * * *'
 
   workflow_dispatch:
-    inputs:f
+    inputs:
       max_posts:
         description: 'Max posts per user'
         required: false
@@ -19,8 +19,6 @@ permissions:
 env:
   XUEQIU_USERS: ${{ vars.XUEQIU_USER_ID }}
   XUEQIU_MAX_POSTS: ${{ github.event.inputs.max_posts || '20' }}
-  NO_PROXY: "127.0.0.1,localhost"
-  
 
 jobs:
   generate:
@@ -48,22 +46,27 @@ jobs:
           sudo apt-get install -y google-chrome-stable
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
-      
+        run: |
+          pip install -r requirements.txt
+
       - name: Generate separate Xueqiu feeds
         run: |
-          # DrissionPage 必须直连本机 Chrome，不能走任何代理
-          unset HTTP_PROXY
-          unset HTTPS_PROXY
-          unset ALL_PROXY
-          unset http_proxy
-          unset https_proxy
-          unset all_proxy
+          # DrissionPage 连接本机 Chrome 时不经过代理
+          unset HTTP_PROXY || true
+          unset HTTPS_PROXY || true
+          unset ALL_PROXY || true
+          unset http_proxy || true
+          unset https_proxy || true
+          unset all_proxy || true
 
           export NO_PROXY="127.0.0.1,localhost"
           export no_proxy="127.0.0.1,localhost"
-          
-          # 启动 Chrome，并保持在同一个 step 中运行
+
+          if [ -z "$XUEQIU_USERS" ]; then
+            echo "XUEQIU_USER_ID is not configured"
+            exit 1
+          fi
+
           mkdir -p /tmp/chrome-xueqiu
 
           google-chrome \
@@ -88,18 +91,12 @@ jobs:
               cat /tmp/devtools.json
               break
             fi
-
             sleep 1
           done
 
           if ! curl -s http://127.0.0.1:9222/json/version >/dev/null; then
             echo "Chrome failed to start"
             cat /tmp/chrome.log
-            exit 1
-          fi
-
-          if [ -z "$XUEQIU_USERS" ]; then
-            echo "XUEQIU_USER_ID is not configured"
             exit 1
           fi
 
@@ -123,6 +120,7 @@ jobs:
 
             if [ ! -f "feeds/feed_xueqiu_user.xml" ]; then
               echo "Feed file was not generated for $UID_VALUE"
+              kill "$CHROME_PID" 2>/dev/null || true
               exit 1
             fi
 
@@ -133,7 +131,8 @@ jobs:
           kill "$CHROME_PID" 2>/dev/null || true
 
       - name: Validate feeds
-        run: python scripts/validate_feeds.py
+        run: |
+          python scripts/validate_feeds.py
 
       - name: Commit and push
         run: |
