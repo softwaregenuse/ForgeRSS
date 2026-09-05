@@ -239,7 +239,7 @@ class XueqiuUserGenerator(BaseFeedGenerator):
 
     def fetch_articles(self) -> list[Article]:
         try:
-            from DrissionPage import ChromiumPage, ChromiumOptions
+            from DrissionPage import Chromium, ChromiumOptions
         except ImportError:
             self.logger.error("DrissionPage not installed. Run: pip install DrissionPage")
             return []
@@ -261,7 +261,7 @@ class XueqiuUserGenerator(BaseFeedGenerator):
                 continue
             self.logger.info(f"Fetching xueqiu user {uid} ({url})")
             try:
-                items = self._fetch_user(uid, url, per_user_cap, ChromiumPage, ChromiumOptions)
+                items = self._fetch_user(uid, url, per_user_cap, Chromium, ChromiumOptions)
                 all_articles.extend(items)
                 self.logger.info(f"Got {len(items)} posts for {uid}")
             except Exception as e:
@@ -279,15 +279,35 @@ class XueqiuUserGenerator(BaseFeedGenerator):
         uid: str,
         url: str,
         max_posts: int,
-        ChromiumPage,
+        Chromium,
         ChromiumOptions,
     ) -> list[Article]:
-        co = ChromiumOptions()
-        co.set_address("127.0.0.1:9222")
+        import json
+        import urllib.request
 
+        browser = None
         page = None
+
         try:
-            page = ChromiumPage(co)
+            # 读取 workflow 已经启动好的 Chrome DevTools 信息
+            with urllib.request.urlopen(
+                "http://127.0.0.1:9222/json/version",
+                timeout=10
+            ) as response:
+                devtools = json.load(response)
+
+            ws_url = devtools.get("webSocketDebuggerUrl", "")
+
+            if not ws_url:
+                self.logger.error("Chrome DevTools did not return webSocketDebuggerUrl")
+                return []
+
+            self.logger.info(f"Connecting to Chrome WebSocket: {ws_url}")
+
+            # 直接通过 WebSocket 接管已经运行的 Chrome
+            browser = Chromium(ws_url)
+            page = browser.latest_tab
+
             try:
                 page.run_js(
                     "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
@@ -299,6 +319,7 @@ class XueqiuUserGenerator(BaseFeedGenerator):
             time.sleep(6)
 
             html = page.html
+
             if not html or "aliyun_waf" in html:
                 self.logger.error(f"WAF challenge not resolved for {url}")
                 return []
@@ -306,39 +327,70 @@ class XueqiuUserGenerator(BaseFeedGenerator):
             soup = BeautifulSoup(html, "html.parser")
 
             user_name = self._extract_user_name(soup)
+
             if user_name and self._first_user_name is None:
                 self._first_user_name = user_name
 
             arts = soup.find_all("article")
-            self.logger.info(f"Found {len(arts)} timeline cards on list page")
+
+            self.logger.info(
+                f"Found {len(arts)} timeline cards on list page"
+            )
 
             parsed: list[Article] = []
             now = datetime.now(CN_TZ)
 
             for art in arts[:max_posts]:
                 try:
-                    info = self._parse_card(art, uid, user_name, now)
+                    info = self._parse_card(
+                        art,
+                        uid,
+                        user_name,
+                        now
+                    )
                 except Exception as e:
-                    self.logger.debug(f"Failed to parse a card: {e}")
+                    self.logger.debug(
+                        f"Failed to parse a card: {e}"
+                    )
                     continue
+
                 if not info:
                     continue
 
-                # Long-form posts: list contains only ~150-char summary. Fetch detail.
+                # 长文章：列表页只有摘要，再进入详情页获取全文
                 if info["is_longtext"]:
-                    time.sleep(random.uniform(*DETAIL_DELAY_RANGE))
-                    detail_html = self._fetch_detail(page, info["url"])
-                    if detail_html:
-                        info = self._enrich_with_detail(info, detail_html)
+                    time.sleep(
+                        random.uniform(*DETAIL_DELAY_RANGE)
+                    )
 
-                parsed.append(self._build_article(info))
+                    detail_html = self._fetch_detail(
+                        page,
+                        info["url"]
+                    )
+
+                    if detail_html:
+                        info = self._enrich_with_detail(
+                            info,
+                            detail_html
+                        )
+
+                parsed.append(
+                    self._build_article(info)
+                )
 
             return parsed
 
+        except Exception as e:
+            self.logger.error(
+                f"Chrome WebSocket fetch failed for {uid}: {e}",
+                exc_info=True
+            )
+            return []
+
         finally:
-            if page is not None:
+            if browser is not None:
                 try:
-                    page.quit()
+                    browser.quit()
                 except Exception:
                     pass
 
