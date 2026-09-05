@@ -20,7 +20,6 @@ env:
   XUEQIU_USERS: ${{ vars.XUEQIU_USER_ID }}
   XUEQIU_MAX_POSTS: ${{ github.event.inputs.max_posts || '20' }}
   NO_PROXY: "127.0.0.1,localhost"
-  no_proxy: "127.0.0.1,localhost"
   
 
 jobs:
