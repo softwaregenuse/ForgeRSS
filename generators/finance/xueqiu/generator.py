@@ -284,13 +284,20 @@ class XueqiuUserGenerator(BaseFeedGenerator):
     ) -> list[Article]:
         tmp_profile = tempfile.mkdtemp(prefix="drission_xueqiu_")
         co = ChromiumOptions()
-        co.headless(True)
+        co.set_browser_path("/usr/bin/google-chrome")
+        co.auto_port()
+        # 明确使用新版无头模式
+        co.set_argument("--headless=new")
+     
         co.set_argument("--no-sandbox")
-        co.set_argument("--window-size=1920,1080")
         co.set_argument("--disable-dev-shm-usage")
+        co.set_argument("--disable-gpu")
+        co.set_argument("--window-size=1920,1080")
         co.set_argument("--disable-blink-features=AutomationControlled")
         co.set_argument("--lang=zh-CN")
         co.set_argument(f"--user-data-dir={tmp_profile}")
+
+
 
         page = None
         try:
