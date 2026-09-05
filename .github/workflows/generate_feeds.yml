@@ -60,6 +60,7 @@ jobs:
             --disable-gpu \
             --remote-debugging-address=127.0.0.1 \
             --remote-debugging-port=9222 \
+            --remote-allow-origins=* \
             --user-data-dir=/tmp/chrome-xueqiu \
             about:blank \
             >/tmp/chrome.log 2>&1 &
