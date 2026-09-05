@@ -45,58 +45,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
+          google-chrome --version
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
 
       - name: Generate separate Xueqiu feeds
         run: |
-          # DrissionPage 连接本机 Chrome 时不经过代理
-          unset HTTP_PROXY || true
-          unset HTTPS_PROXY || true
-          unset ALL_PROXY || true
-          unset http_proxy || true
-          unset https_proxy || true
-          unset all_proxy || true
-
-          export NO_PROXY="127.0.0.1,localhost"
-          export no_proxy="127.0.0.1,localhost"
-
           if [ -z "$XUEQIU_USERS" ]; then
             echo "XUEQIU_USER_ID is not configured"
-            exit 1
-          fi
-
-          mkdir -p /tmp/chrome-xueqiu
-
-          google-chrome \
-            --headless=new \
-            --no-sandbox \
-            --disable-dev-shm-usage \
-            --disable-gpu \
-            --remote-debugging-address=127.0.0.1 \
-            --remote-debugging-port=9222 \
-            --remote-allow-origins=* \
-            --user-data-dir=/tmp/chrome-xueqiu \
-            about:blank \
-            >/tmp/chrome.log 2>&1 &
-
-          CHROME_PID=$!
-
-          echo "Waiting for Chrome DevTools..."
-
-          for i in {1..15}; do
-            if curl -s http://127.0.0.1:9222/json/version >/tmp/devtools.json; then
-              echo "Chrome DevTools is ready"
-              cat /tmp/devtools.json
-              break
-            fi
-            sleep 1
-          done
-
-          if ! curl -s http://127.0.0.1:9222/json/version >/dev/null; then
-            echo "Chrome failed to start"
-            cat /tmp/chrome.log
             exit 1
           fi
 
@@ -115,20 +73,21 @@ jobs:
 
             export XUEQIU_USER_ID="$UID_VALUE"
 
+            rm -f feeds/feed_xueqiu_user.xml
+
             python scripts/run_single.py xueqiu_user \
               --max "$XUEQIU_MAX_POSTS"
 
             if [ ! -f "feeds/feed_xueqiu_user.xml" ]; then
-              echo "Feed file was not generated for $UID_VALUE"
-              kill "$CHROME_PID" 2>/dev/null || true
+              echo "Feed file was not generated for UID: $UID_VALUE"
               exit 1
             fi
 
             mv "feeds/feed_xueqiu_user.xml" \
                "feeds/xueqiu_${UID_VALUE}.xml"
-          done
 
-          kill "$CHROME_PID" 2>/dev/null || true
+            echo "Generated: feeds/xueqiu_${UID_VALUE}.xml"
+          done
 
       - name: Validate feeds
         run: |
@@ -139,7 +98,11 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-          git add feeds/ cache/
+          git add feeds/
+
+          if [ -d "cache" ]; then
+            git add cache/ || true
+          fi
 
           if git diff --staged --quiet; then
             echo "No changes to commit"
