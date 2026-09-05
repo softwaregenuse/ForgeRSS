@@ -48,8 +48,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       
-      - name: Start Chrome for DrissionPage
+      - name: Generate separate Xueqiu feeds
         run: |
+          # 启动 Chrome，并保持在同一个 step 中运行
           mkdir -p /tmp/chrome-xueqiu
 
           google-chrome \
@@ -63,16 +64,26 @@ jobs:
             about:blank \
             >/tmp/chrome.log 2>&1 &
 
-          sleep 5
+          CHROME_PID=$!
 
-          echo "Chrome processes:"
-          ps aux | grep -i chrome | head
+          echo "Waiting for Chrome DevTools..."
 
-          echo "DevTools:"
-          curl -s http://127.0.0.1:9222/json/version
+          for i in {1..15}; do
+            if curl -s http://127.0.0.1:9222/json/version >/tmp/devtools.json; then
+              echo "Chrome DevTools is ready"
+              cat /tmp/devtools.json
+              break
+            fi
 
-      - name: Generate separate Xueqiu feeds
-        run: |
+            sleep 1
+          done
+
+          if ! curl -s http://127.0.0.1:9222/json/version >/dev/null; then
+            echo "Chrome failed to start"
+            cat /tmp/chrome.log
+            exit 1
+          fi
+
           if [ -z "$XUEQIU_USERS" ]; then
             echo "XUEQIU_USER_ID is not configured"
             exit 1
@@ -104,6 +115,8 @@ jobs:
             mv "feeds/feed_xueqiu_user.xml" \
                "feeds/xueqiu_${UID_VALUE}.xml"
           done
+
+          kill "$CHROME_PID" 2>/dev/null || true
 
       - name: Validate feeds
         run: python scripts/validate_feeds.py
