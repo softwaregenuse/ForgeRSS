@@ -47,6 +47,29 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+      
+      - name: Start Chrome for DrissionPage
+        run: |
+          mkdir -p /tmp/chrome-xueqiu
+
+          google-chrome \
+            --headless=new \
+            --no-sandbox \
+            --disable-dev-shm-usage \
+            --disable-gpu \
+            --remote-debugging-address=127.0.0.1 \
+            --remote-debugging-port=9222 \
+            --user-data-dir=/tmp/chrome-xueqiu \
+            about:blank \
+            >/tmp/chrome.log 2>&1 &
+
+          sleep 5
+
+          echo "Chrome processes:"
+          ps aux | grep -i chrome | head
+
+          echo "DevTools:"
+          curl -s http://127.0.0.1:9222/json/version
 
       - name: Generate separate Xueqiu feeds
         run: |
