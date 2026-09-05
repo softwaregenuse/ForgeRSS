@@ -282,7 +282,6 @@ class XueqiuUserGenerator(BaseFeedGenerator):
         ChromiumPage,
         ChromiumOptions,
     ) -> list[Article]:
-        tmp_profile = tempfile.mkdtemp(prefix="drission_xueqiu_")
         co = ChromiumOptions()
         co.set_browser_path("/usr/bin/google-chrome")
         co.auto_port()
@@ -295,7 +294,6 @@ class XueqiuUserGenerator(BaseFeedGenerator):
         co.set_argument("--window-size=1920,1080")
         co.set_argument("--disable-blink-features=AutomationControlled")
         co.set_argument("--lang=zh-CN")
-        co.set_argument(f"--user-data-dir={tmp_profile}")
 
 
 
@@ -355,7 +353,6 @@ class XueqiuUserGenerator(BaseFeedGenerator):
                     page.quit()
                 except Exception:
                     pass
-            shutil.rmtree(tmp_profile, ignore_errors=True)
 
     def _extract_user_name(self, soup: BeautifulSoup) -> Optional[str]:
         t = soup.find("title")
