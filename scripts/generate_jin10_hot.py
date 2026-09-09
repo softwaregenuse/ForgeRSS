@@ -3,156 +3,330 @@
 import html
 import os
 import re
+import shutil
+import tempfile
+import time
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from urllib.parse import urljoin
 
-import requests
 from bs4 import BeautifulSoup
 
 
 PAGE_URL = "https://xnews.jin10.com/53"
 OUTPUT_FILE = "feeds/jin10_hot.xml"
 
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/151.0.0.0 Safari/537.36"
-)
-
-
-def fetch_page():
-    response = requests.get(
-        PAGE_URL,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": (
-                "text/html,application/xhtml+xml,"
-                "application/xml;q=0.9,*/*;q=0.8"
-            ),
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        },
-        timeout=30,
-    )
-
-    response.raise_for_status()
-    return response.text
-
 
 def clean_text(value):
-    return re.sub(r"\s+", " ", value or "").strip()
+    return re.sub(
+        r"\s+",
+        " ",
+        value or "",
+    ).strip()
+
+
+def fetch_rendered_html():
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+
+    profile_dir = tempfile.mkdtemp(
+        prefix="jin10-hot-"
+    )
+
+    options = Options()
+
+    options.binary_location = (
+        "/usr/bin/google-chrome"
+    )
+
+    options.add_argument(
+        "--headless=new"
+    )
+    options.add_argument(
+        "--no-sandbox"
+    )
+    options.add_argument(
+        "--disable-dev-shm-usage"
+    )
+    options.add_argument(
+        "--disable-gpu"
+    )
+    options.add_argument(
+        "--window-size=1920,1080"
+    )
+    options.add_argument(
+        "--lang=zh-CN"
+    )
+    options.add_argument(
+        "--disable-blink-features=AutomationControlled"
+    )
+    options.add_argument(
+        f"--user-data-dir={profile_dir}"
+    )
+
+    driver = None
+
+    try:
+        driver = webdriver.Chrome(
+            options=options
+        )
+
+        try:
+            driver.execute_cdp_cmd(
+                "Page.addScriptToEvaluateOnNewDocument",
+                {
+                    "source": """
+                    Object.defineProperty(
+                        navigator,
+                        'webdriver',
+                        {
+                            get: () => undefined
+                        }
+                    );
+                    """
+                },
+            )
+        except Exception:
+            pass
+
+        print(
+            "Opening Jin10 hot-news page..."
+        )
+
+        driver.get(
+            PAGE_URL
+        )
+
+        time.sleep(8)
+
+        # 向下滚动几次，让懒加载内容出来
+        for _ in range(4):
+            driver.execute_script(
+                "window.scrollTo("
+                "0, document.body.scrollHeight"
+                ");"
+            )
+            time.sleep(2)
+
+        page_source = (
+            driver.page_source
+        )
+
+        print(
+            "Rendered HTML length:",
+            len(page_source),
+        )
+
+        return page_source
+
+    finally:
+        if driver is not None:
+            driver.quit()
+
+        shutil.rmtree(
+            profile_dir,
+            ignore_errors=True,
+        )
 
 
 def extract_articles(page_html):
-    soup = BeautifulSoup(page_html, "html.parser")
+    soup = BeautifulSoup(
+        page_html,
+        "html.parser",
+    )
 
     articles = []
     seen = set()
 
-    for a in soup.find_all("a", href=True):
-        href = a.get("href", "").strip()
+    for a in soup.find_all(
+        "a",
+        href=True,
+    ):
+        href = (
+            a.get("href")
+            or ""
+        ).strip()
 
         if not href:
             continue
 
-        absolute = urljoin(PAGE_URL, href)
-
-        # 金十文章详情通常在 xnews.jin10.com/details/
-        if "/details/" not in absolute:
-            continue
-
-        if absolute in seen:
-            continue
-
-        seen.add(absolute)
-
-        text = clean_text(
-            a.get_text(" ", strip=True)
+        absolute = urljoin(
+            PAGE_URL,
+            href,
         )
 
-        if not text:
+        if (
+            "xnews.jin10.com/details/"
+            not in absolute
+        ):
             continue
 
-        # 尝试从链接内部 / 周边结构提取标题和摘要
-        title = ""
-        summary = ""
+        match = re.search(
+            r"/details/(\d+)",
+            absolute,
+        )
 
-        # 常见情况下链接文本里标题在前、摘要在后
-        # 先尝试找标题节点
+        if not match:
+            continue
+
+        article_id = match.group(1)
+
+        if article_id in seen:
+            continue
+
+        container = a
+
+        # 向上寻找文章卡片
+        best_text = ""
+
+        for _ in range(6):
+            if (
+                container is None
+                or container.parent is None
+            ):
+                break
+
+            text = clean_text(
+                container.get_text(
+                    " ",
+                    strip=True,
+                )
+            )
+
+            if len(text) > len(best_text):
+                best_text = text
+
+            container = container.parent
+
+        link_text = clean_text(
+            a.get_text(
+                " ",
+                strip=True,
+            )
+        )
+
+        title = ""
+
+        # 优先找标题节点
         for selector in [
             "h1",
             "h2",
             "h3",
+            "h4",
             ".title",
-            ".news-title",
-            ".article-title",
+            "[class*=title]",
         ]:
-            node = a.select_one(selector)
+            node = a.select_one(
+                selector
+            )
+
             if node:
-                title = clean_text(
-                    node.get_text(" ", strip=True)
+                candidate = clean_text(
+                    node.get_text(
+                        " ",
+                        strip=True,
+                    )
                 )
-                if title:
+
+                if (
+                    candidate
+                    and len(candidate) >= 6
+                ):
+                    title = candidate
                     break
 
         if not title:
-            # 退化方案：
-            # 去掉 HOT / 精选 / 时间等常见尾巴
-            title = re.sub(
-                r"\s+(HOT\s*)?(精选\s*)?"
-                r"(\d+小时前|\d+天前|\d{2}-\d{2}\s+\d{2}:\d{2})"
-                r".*$",
-                "",
-                text,
-            ).strip()
+            title = link_text
 
-        if not title:
-            title = text[:80]
+        # 清除常见标记
+        title = re.sub(
+            r"^(NEW|HOT|精选)\s*",
+            "",
+            title,
+            flags=re.I,
+        ).strip()
 
-        # 尝试取卡片容器里的摘要
-        container = a
+        title = re.sub(
+            r"\s+(NEW|HOT|精选).*$",
+            "",
+            title,
+            flags=re.I,
+        ).strip()
 
-        for _ in range(4):
-            if container.parent is None:
-                break
+        # 如果链接文本太长，
+        # 尝试按 HOT / 精选 / 时间截断
+        if len(title) > 120:
+            title = re.split(
+                r"\s+(?:HOT|NEW|精选|\d+分钟前|\d+小时前|\d+天前|\d{2}-\d{2})",
+                title,
+                maxsplit=1,
+                flags=re.I,
+            )[0].strip()
 
-            container = container.parent
+        if (
+            not title
+            or len(title) < 4
+        ):
+            continue
 
-            block_text = clean_text(
-                container.get_text(" ", strip=True)
-            )
-
-            if (
-                len(block_text) > len(title) + 20
-                and title in block_text
-            ):
-                summary = block_text
-                break
+        summary = best_text
 
         if summary:
+            # 去掉标题本身
             summary = summary.replace(
                 title,
                 "",
                 1,
             ).strip()
 
+            # 去掉界面标签
             summary = re.sub(
-                r"\bHOT\b",
+                r"\b(?:NEW|HOT|精选)\b",
                 "",
                 summary,
                 flags=re.I,
             )
 
+            # 去掉时间
             summary = re.sub(
-                r"\b精选\b",
+                r"\b\d+分钟前\b",
                 "",
                 summary,
             )
 
-            summary = clean_text(summary)
+            summary = re.sub(
+                r"\b\d+小时前\b",
+                "",
+                summary,
+            )
+
+            summary = re.sub(
+                r"\b\d+天前\b",
+                "",
+                summary,
+            )
+
+            summary = re.sub(
+                r"\b\d{2}-\d{2}\s+\d{2}:\d{2}\b",
+                "",
+                summary,
+            )
+
+            summary = clean_text(
+                summary
+            )
+
+            # 避免抓到整个页面
+            if len(summary) > 500:
+                summary = summary[:500] + "…"
+
+        seen.add(
+            article_id
+        )
 
         articles.append(
             {
+                "id": article_id,
                 "title": title,
                 "link": absolute,
                 "summary": summary,
@@ -163,51 +337,56 @@ def extract_articles(page_html):
 
 
 def generate_rss(articles):
-    items = []
+    rss_items = []
 
     for article in articles:
         title = article["title"]
         link = article["link"]
+        guid = article["id"]
         summary = article["summary"]
 
-        guid = link
-
-        description = ""
+        parts = []
 
         if summary:
-            description = (
+            parts.append(
                 "<p>"
                 + html.escape(summary)
                 + "</p>"
             )
 
-        description += (
+        parts.append(
             '<p><a href="'
             + html.escape(link)
             + '">阅读金十原文</a></p>'
         )
 
-        items.append(
+        description = "".join(
+            parts
+        )
+
+        rss_items.append(
             f"""
         <item>
             <title>{html.escape(title)}</title>
             <link>{html.escape(link)}</link>
-            <guid isPermaLink="true">{html.escape(guid)}</guid>
+            <guid isPermaLink="false">{html.escape(guid)}</guid>
             <description><![CDATA[{description}]]></description>
         </item>
 """
         )
 
-    if not items:
+    if not rss_items:
         raise RuntimeError(
-            "No Jin10 hot-news articles found"
+            "No valid Jin10 hot-news items generated"
         )
 
     now = format_datetime(
-        datetime.now(timezone.utc)
+        datetime.now(
+            timezone.utc
+        )
     )
 
-    rss = f"""<?xml version="1.0" encoding="UTF-8"?>
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
     <channel>
         <title>金十数据 - 热点头条</title>
@@ -216,16 +395,14 @@ def generate_rss(articles):
         <language>zh-cn</language>
         <generator>ForgeRSS Jin10 Hot</generator>
         <lastBuildDate>{html.escape(now)}</lastBuildDate>
-        {''.join(items)}
+        {''.join(rss_items)}
     </channel>
 </rss>
 """
 
-    return rss
-
 
 def main():
-    page_html = fetch_page()
+    page_html = fetch_rendered_html()
 
     articles = extract_articles(
         page_html
@@ -238,7 +415,15 @@ def main():
 
     if not articles:
         raise RuntimeError(
-            "No articles found; refusing to overwrite RSS"
+            "No articles found; "
+            "refusing to overwrite RSS"
+        )
+
+    for article in articles[:5]:
+        print(
+            "-",
+            article["id"],
+            article["title"],
         )
 
     rss = generate_rss(
@@ -250,7 +435,10 @@ def main():
         exist_ok=True,
     )
 
-    tmp_file = OUTPUT_FILE + ".tmp"
+    tmp_file = (
+        OUTPUT_FILE
+        + ".tmp"
+    )
 
     with open(
         tmp_file,
@@ -265,7 +453,8 @@ def main():
     )
 
     print(
-        f"Generated {OUTPUT_FILE}: "
+        f"Generated "
+        f"{OUTPUT_FILE}: "
         f"{len(articles)} items"
     )
 
