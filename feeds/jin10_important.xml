@@ -6,8 +6,16 @@
         <description>金十数据重要事件 RSS</description>
         <language>zh-cn</language>
         <generator>ForgeRSS Jin10 Important</generator>
-        <lastBuildDate>Wed, 09 Sep 2026 23:05:56 +0000</lastBuildDate>
+        <lastBuildDate>Wed, 09 Sep 2026 23:36:13 +0000</lastBuildDate>
         
+        <item>
+            <title>美媒：特朗普亲信推敲伊朗战事可能打到特朗普卸任</title>
+            <link>https://flash.jin10.com/detail/20260910070957410800</link>
+            <guid isPermaLink="false">20260910070957410800</guid>
+            <pubDate>Thu, 10 Sep 2026 07:09:57 +0800</pubDate>
+            <description><![CDATA[<p>【美媒：特朗普亲信推敲伊朗战事可能打到特朗普卸任】金十数据9月10日讯，据华尔街日报，美国官员表示，白宫高级顾问已私下向特朗普提出一种可能性，即伊朗战争可能持续至其剩余任期结束。这一说法与特朗普公开保证战争将迅速取得胜利的表态相悖。官员们表示，在椭圆形办公室和白宫战情室的讨论中，副总统万斯、国务卿鲁比奥等人与总统探讨了这样一种情况：德黑兰方面可能会在封锁和其他军事手段的压力下继续抵抗，从而可能导致冲突延续至2029年1月的总统就职日之后。这些闭门讨论进行之际，特朗普周三告诉记者，战争将在11月中期选举后“立即”结束，因为“伊朗撑不下去了”。</p><p><strong>相关信息</strong></p><ul><li>跟踪中东局势动态：请升级版本查看该快讯注解</li></ul>]]></description>
+        </item>
+
         <item>
             <title>金十数据全球财经早餐 | 2026年9月10日</title>
             <link>https://xnews.jin10.com/details/229625</link>
@@ -238,14 +246,6 @@
             <guid isPermaLink="false">20260908141616222800</guid>
             <pubDate>Tue, 08 Sep 2026 14:16:16 +0800</pubDate>
             <description><![CDATA[<p>【阿斯麦推进新一代光刻机升级，瞄准大型数据中心芯片市场】金十数据9月8日讯，阿斯麦（ASML）表示，计划与其主要客户合作，开发能够生产最先进芯片制造设备的新方案，以满足英伟达等公司设计的大型数据中心芯片需求。目前ASML生产的被广泛应用的极紫外(EUV)光刻机可制造面积最大约800平方毫米的芯片，ASML即将推出的下一代“高数值孔径”EUV光刻机，能够制造出更为精细的芯片。不过，由于其采用尺寸较小的掩模版，目前在可制造芯片面积方面受到限制。ASML计划到2031年展示采用更大尺寸掩模版的试验生产线，并在2033年使这项新技术具备大规模量产能力。</p><p><strong>相关信息</strong></p><ul><li><a href="https://www.jin10.com/feature/2026/06/08/plus/index.html#/?id=5428">解决高NA EUV曝光视场缩小问题</a></li></ul>]]></description>
-        </item>
-
-        <item>
-            <title>日元强势反弹触发止损潮，“30年来最大”一轮套利交易危险了</title>
-            <link>https://xnews.jin10.com/details/229511</link>
-            <guid isPermaLink="false">20260908110306706800</guid>
-            <pubDate>Tue, 08 Sep 2026 11:03:06 +0800</pubDate>
-            <description><![CDATA[<p><img src="https://gimg.jin10.com/gallary/25/10/mGlGkudGZG_Pw52YiS8dI.png/lite" style="max-width:100%;height:auto;" /></p><p>日元快速升值正同时受技术性止损和日本央行加息预期推动。最新数据显示，日本7月名义工资增速创1997年以来新高，进一步巩固9月加息以及年内再次加息的预期。点击查看</p><p>分类：热点头条</p>]]></description>
         </item>
 
     </channel>
