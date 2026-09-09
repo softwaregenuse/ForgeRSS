@@ -6,8 +6,16 @@
         <description>金十数据重要事件 RSS</description>
         <language>zh-cn</language>
         <generator>ForgeRSS Jin10 Important</generator>
-        <lastBuildDate>Wed, 09 Sep 2026 21:37:02 +0000</lastBuildDate>
+        <lastBuildDate>Wed, 09 Sep 2026 22:06:06 +0000</lastBuildDate>
         
+        <item>
+            <title>伊媒：伊朗锡里克地区遭袭</title>
+            <link>https://flash.jin10.com/detail/20260910053044484800</link>
+            <guid isPermaLink="false">20260910053044484800</guid>
+            <pubDate>Thu, 10 Sep 2026 05:30:44 +0800</pubDate>
+            <description><![CDATA[<p>【伊媒：伊朗锡里克地区遭袭】据伊朗国家媒体：伊朗锡里克多个地区遭到炮弹袭击。</p>]]></description>
+        </item>
+
         <item>
             <title>金十整理：苹果秋新发布会主要看点一览——折叠屏卖15999、18 Pro换芯升级</title>
             <link>https://flash.jin10.com/detail/20260910033751025800</link>
@@ -238,14 +246,6 @@
             <guid isPermaLink="false">20260908102949269800</guid>
             <pubDate>Tue, 08 Sep 2026 10:29:49 +0800</pubDate>
             <description><![CDATA[<p>【延续快速增长态势，前8个月我国外贸增长17.6%】金十数据9月8日讯，海关总署9月8日发布数据显示，今年前8个月，我国货物贸易进出口总值34.78万亿元，同比增速继续上行至17.6%，较前7个月加快0.3个百分点。其中，出口20.17万亿元，同比增长14.6%；进口14.61万亿元，同比增长22%。8月当月，我国进出口4.65万亿元，同比增长19.8%。其中，出口、进口分别增长18.6%、21.7%，连续4个月同时保持两位数增长，进口月度同比增速连续6个月超过出口。</p><p>来源：新华社</p><p><strong>相关信息</strong></p><ul><li><a href="https://www.jin10.com/feature/2026/06/08/plus/index.html#/?id=5403">外需韧性超预期</a></li></ul>]]></description>
-        </item>
-
-        <item>
-            <title>LME铜价创历史新高！特朗普关税预期“重绘”全球铜流向</title>
-            <link>https://xnews.jin10.com/details/229499</link>
-            <guid isPermaLink="false">20260908084600196800</guid>
-            <pubDate>Tue, 08 Sep 2026 08:46:00 +0800</pubDate>
-            <description><![CDATA[<p><img src="https://gimg.jin10.com/news/26/01/1TT7c33yGJtKStsbQmCml.png/lite" style="max-width:100%;height:auto;" /></p><p>美国与其他市场之间的铜价溢价，正刺激交易商将数十万吨铜运往美国。随着铜库存越来越集中于美国，LME可交付库存持续下降，现货供应压力进一步显现。点击查看...</p><p>分类：市场热点</p>]]></description>
         </item>
 
     </channel>
