@@ -6,8 +6,16 @@
         <description>金十数据重要事件 RSS</description>
         <language>zh-cn</language>
         <generator>ForgeRSS Jin10 Important</generator>
-        <lastBuildDate>Wed, 09 Sep 2026 17:06:07 +0000</lastBuildDate>
+        <lastBuildDate>Wed, 09 Sep 2026 17:37:57 +0000</lastBuildDate>
         
+        <item>
+            <title>苹果公布iPhone 18 Pro系列价格：1199美元起</title>
+            <link>https://flash.jin10.com/detail/20260910013029960800</link>
+            <guid isPermaLink="false">20260910013029960800</guid>
+            <pubDate>Thu, 10 Sep 2026 01:30:29 +0800</pubDate>
+            <description><![CDATA[<p>【苹果公布iPhone 18 Pro系列价格：1199美元起】金十数据9月10日讯，苹果(AAPL.O)公布iPhone 18 Pro系列价格，iPhone 18 Pro起售价为1199美元，iPhone 18 Pro Max起售价为1299美元。（作为对比，iPhone 17 Pro起售价为1099美元/8999元人民币，iPhone 17 Pro Max起售价为1199美元/9999元人民币）</p>]]></description>
+        </item>
+
         <item>
             <title>伊朗称将升级打击行动以回应美国的袭击</title>
             <link>https://flash.jin10.com/detail/20260910001521340800</link>
@@ -238,14 +246,6 @@
             <guid isPermaLink="false">20260908072516757800</guid>
             <pubDate>Tue, 08 Sep 2026 07:25:16 +0800</pubDate>
             <description><![CDATA[<p>【消息称英特尔CPU将再涨价10%】金十数据9月8日讯，供应链人士透露，因应整体成本飙升，英特尔(INTC.O)PC CPU过去1年来已陆续涨价，暂定10月上旬再涨10%。在PC终端市场2027年预估小幅衰退的情况下，英特尔仍选择调高CPU价格，显见拉升毛利率为首要目标，过往杀价抢市占已不复见。供应链分析，若英特尔将低毛利率设定为产品去留的重要门槛，势必有部分产品被迫退出。这些需求一旦释出，恐令联发科、高通等Arm阵营业者有机会切入。尤其在IPC、边缘运算及IoT市场，Arm SoC具备高整合度及低功耗优势。</p><p>来源：台湾电子时报</p>]]></description>
-        </item>
-
-        <item>
-            <title>金十数据全球财经早餐 | 2026年9月8日</title>
-            <link>https://xnews.jin10.com/details/229417</link>
-            <guid isPermaLink="false">20260908065926235800</guid>
-            <pubDate>Tue, 08 Sep 2026 06:59:26 +0800</pubDate>
-            <description><![CDATA[<p><img src="https://img.jin10.com/news/26/09/doVLksiamguW9VHkHhIWs.jpg/lite" style="max-width:100%;height:auto;" /></p><p>沙特阿美石油设施又遇袭，乌克兰继续袭击俄罗斯能源设施，巴拿马运河或再度下调通行量，中国央行加速囤金……昨日今晨，全球都发生了哪些大事？</p><p>分类：金十早餐</p>]]></description>
         </item>
 
     </channel>
