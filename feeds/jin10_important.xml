@@ -6,7 +6,7 @@
         <description>金十数据重要事件 RSS</description>
         <language>zh-cn</language>
         <generator>ForgeRSS Jin10 Important</generator>
-        <lastBuildDate>Fri, 11 Sep 2026 09:06:27 +0000</lastBuildDate>
+        <lastBuildDate>Fri, 11 Sep 2026 09:38:53 +0000</lastBuildDate>
         
         <item>
             <title>胡塞武装：将宣布重大军事行动</title>
@@ -22,6 +22,14 @@
             <guid isPermaLink="false">20260911162838682800</guid>
             <pubDate>Fri, 11 Sep 2026 16:28:38 +0800</pubDate>
             <description><![CDATA[<p>【报道：胡塞武装完成对曼德海峡的控制】金十数据9月11日讯，据法新社报道，也门胡塞武装在夺取红海战略要地后，已完成对曼德海峡的控制。曼德海峡连接红海与亚丁湾，是连接印度洋、苏伊士运河和欧洲的重要海上通道。全球约10%的贸易经由这条水道运输。这意味着全球能源运输正面临来自阿拉伯半岛两端的压力。伊朗对霍尔木兹海峡的干扰威胁着波斯湾的主要出口航线，而胡塞武装对曼德海峡的控制，则为经红海驶向苏伊士运河的运输船只制造了另一个瓶颈。</p>]]></description>
+        </item>
+
+        <item>
+            <title>今晚20:30 美联储议息前迎来CPI关键考验</title>
+            <link>https://flash.jin10.com/detail/20260911162403950800</link>
+            <guid isPermaLink="false">20260911162403950800</guid>
+            <pubDate>Fri, 11 Sep 2026 16:24:03 +0800</pubDate>
+            <description><![CDATA[<p>美国8月CPI数据将于今晚20:30公布，这是美联储下周议息前最后一份重要数据，可能直接决定下周是否启动三年多来首次加息。这份报告的核心问题在于：能源和供应冲击，是否已开始向核心通胀传导？点击查看更多前瞻……</p><p><strong>相关信息</strong></p><ul><li><a href="https://xnews.jin10.com/details/229859?id=229859">相关链接</a></li></ul>]]></description>
         </item>
 
         <item>
@@ -238,14 +246,6 @@
             <guid isPermaLink="false">20260910154344390800</guid>
             <pubDate>Thu, 10 Sep 2026 15:43:44 +0800</pubDate>
             <description><![CDATA[<p>【金融监管总局：大力整治“价格战”、违规返佣、“高息高返”等行为】金十数据9月10日讯，金融监管总局副局长丛林9月10日在国新办举行的“开局起步‘十五五’”系列主题新闻发布会上表示，将多措并举营造良好行业生态。引导金融机构树牢正确的政绩观、经营观、业绩观、风险观，切实摒弃规模情结，推动由追求速度和规模向以质量和效益为中心转变，持续提升核心竞争力。大力整治“价格战”、违规返佣、“高息高返”等行为。</p><p>来源：新华社</p>]]></description>
-        </item>
-
-        <item>
-            <title>《金融强国建设“十五五”规划》正式出台</title>
-            <link>https://baijiahao.baidu.com/s?id=1875927543667646431</link>
-            <guid isPermaLink="false">20260910150629830800</guid>
-            <pubDate>Thu, 10 Sep 2026 15:06:29 +0800</pubDate>
-            <description><![CDATA[<p>【《金融强国建设“十五五”规划》正式出台】金十数据9月10日讯，中国人民银行副行长陆磊9月10日在国新办举行的“开局起步‘十五五’”系列主题新闻发布会上表示，近日，《金融强国建设“十五五”规划》正式出台。为实施好相关部署，中国人民银行制定印发了《中国人民银行“十五五”改革发展规划》，配套出台了9份相关领域的行动方案。</p><p>来源：新华社</p>]]></description>
         </item>
 
     </channel>
