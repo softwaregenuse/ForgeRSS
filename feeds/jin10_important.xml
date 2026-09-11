@@ -6,8 +6,16 @@
         <description>金十数据重要事件 RSS</description>
         <language>zh-cn</language>
         <generator>ForgeRSS Jin10 Important</generator>
-        <lastBuildDate>Fri, 11 Sep 2026 06:42:19 +0000</lastBuildDate>
+        <lastBuildDate>Fri, 11 Sep 2026 07:07:35 +0000</lastBuildDate>
         
+        <item>
+            <title>国家发改委：9月11日国家对成品油价格实施调控 调控后实际上调260元、250元</title>
+            <link>https://www.ndrc.gov.cn/xwdt/xwfb/202609/t20260911_1407564.html</link>
+            <guid isPermaLink="false">20260911150038877800</guid>
+            <pubDate>Fri, 11 Sep 2026 15:00:38 +0800</pubDate>
+            <description><![CDATA[<p>【国家发改委：9月11日国家对成品油价格实施调控 调控后实际上调260元、250元】金十数据9月11日讯，8月28日国内成品油价格调整以来，美伊冲突再度升级，国际市场原油价格持续大幅上涨。为减缓国际油价上涨对国内的冲击，在保持现行价格机制框架的基础上，对国内成品油价格采取临时调控措施。根据现行价格机制计算，9月11日国内汽、柴油（标准品）价格每吨分别应上调435元、420元，调控后实际上调260元、250元。</p><p>来源：国家发改委</p>]]></description>
+        </item>
+
         <item>
             <title>CPI“一锤定音”！美联储会否开启三年多来首次加息就看今晚？</title>
             <link>https://xnews.jin10.com/details/229859</link>
@@ -238,14 +246,6 @@
             <guid isPermaLink="false">20260910140524893800</guid>
             <pubDate>Thu, 10 Sep 2026 14:05:24 +0800</pubDate>
             <description><![CDATA[<p>【DeepSeek V4.1 Flash模型正式发布】金十数据9月10日讯，9月10日，DeepSeek正式发布DeepSeek V4.1 Flash模型。这是公司全新模型结构系列中的最小尺寸的模型，具备原生多模态视觉理解能力。据介绍，新一代模型大幅减少了KV Cache缓存的大小，与上一代模型相比，对HBM的需求减少到1/4，对SSD的需求减少到1/8。在Agent使用场景中，缓存命中的费用往往占比较高，对KV Cache的压缩大幅降低了Agent类任务的使用成本。</p><p><strong>相关信息</strong></p><ul><li><a href="https://mp.weixin.qq.com/s/qg0NU3NNUbp1co2PdkAPAg">相关链接</a></li><li><a href="https://www.jin10.com/feature/2026/06/08/plus/index.html#/?id=5647">存储牛市会被影响吗</a></li></ul>]]></description>
-        </item>
-
-        <item>
-            <title>特朗普为中期选举拉响动员令：共和党赢，每人发5000美元</title>
-            <link>https://xnews.jin10.com/details/229728</link>
-            <guid isPermaLink="false">20260910105906261800</guid>
-            <pubDate>Thu, 10 Sep 2026 10:59:06 +0800</pubDate>
-            <description><![CDATA[<p><img src="https://gimg.jin10.com/gallary/25/10/Y7Dcmh4xw8hHkWc6F0_lR.png/lite" style="max-width:100%;height:auto;" /></p><p>特朗普在达拉斯举行高规格党内大会，他请求选民让他“完成工作”，要求选民“四五年后还记住我”。他承诺共和党若赢中期选举，每人发5000美元“特朗普股息”。</p><p>分类：特朗普动态</p>]]></description>
         </item>
 
     </channel>
