@@ -2,8 +2,8 @@ name: Generate Xueqiu Feeds
 
 on:
   schedule:
-    # 每 4 小时运行一次
-    - cron: '0 */4 * * *'
+    # 每 8 小时运行一次
+    - cron: '0 */8 * * *'
 
   workflow_dispatch:
     inputs:
