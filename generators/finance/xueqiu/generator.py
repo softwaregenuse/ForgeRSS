@@ -10,7 +10,10 @@ then parses the timeline HTML directly.
 
 Configuration:
 
-1. XUEQIU_USER_ID env var (comma-separated for multiple users). Accepts:
+1. XUEQIU_USER_ID env var.
+   Exactly one user must be provided per process.
+
+   Accepts:
    - pure uid     "8353550788"
    - full URL     "https://xueqiu.com/u/8353550788"
 
@@ -18,6 +21,17 @@ Configuration:
 
 Example:
     XUEQIU_USER_ID="8353550788" python scripts/run_single.py xueqiu_user
+
+Each user is isolated into its own ForgeRSS feed identity:
+
+    xueqiu_<UID>
+
+Therefore each user gets its own:
+
+    cache/xueqiu_<UID>.json
+    feeds/feed_xueqiu_<UID>.xml
+
+and its own SQLite feed_name.
 """
 
 import logging
@@ -295,23 +309,20 @@ def _clean_for_rss(node: Tag) -> str:
 
 
 class XueqiuUserGenerator(BaseFeedGenerator):
-    """RSS generator for Xueqiu user posts."""
+    """RSS generator for one isolated Xueqiu user."""
 
+    # Keep this class-level name so scripts/run_single.py can still
+    # locate this generator by the name "xueqiu_user".
+    #
+    # __init__ replaces self.FEED_NAME with xueqiu_<UID> before
+    # BaseFeedGenerator starts using cache/database paths.
     FEED_NAME = "xueqiu_user"
+
     FEED_TITLE = "Xueqiu User Posts"
     FEED_URL = "https://xueqiu.com/"
-    FEED_DESCRIPTION = "Latest posts from Xueqiu users"
+    FEED_DESCRIPTION = "Latest posts from Xueqiu user"
     FEED_LANGUAGE = "zh-CN"
     FEED_LOGO = "https://xueqiu.com/favicon.ico"
-
-    USER_INPUTS = [
-        u.strip()
-        for u in os.environ.get(
-            "XUEQIU_USER_ID",
-            "",
-        ).split(",")
-        if u.strip()
-    ]
 
     MAX_POSTS = int(
         os.environ.get(
@@ -321,18 +332,69 @@ class XueqiuUserGenerator(BaseFeedGenerator):
     )
 
     def __init__(self):
+        raw_inputs = [
+            u.strip()
+            for u in os.environ.get(
+                "XUEQIU_USER_ID",
+                "",
+            ).split(",")
+            if u.strip()
+        ]
+
+        if not raw_inputs:
+            raise ValueError(
+                "XUEQIU_USER_ID is not configured."
+            )
+
+        if len(raw_inputs) != 1:
+            raise ValueError(
+                "Xueqiu isolated feed mode requires exactly "
+                "one XUEQIU_USER_ID per process."
+            )
+
+        uid, profile_url = _parse_user_input(
+            raw_inputs[0]
+        )
+
+        if not uid or not uid.isdigit():
+            raise ValueError(
+                f"Invalid XUEQIU_USER_ID: {raw_inputs[0]}"
+            )
+
+        # =====================================================
+        # IMPORTANT:
+        # Give every Xueqiu user a completely separate feed ID.
+        #
+        # BaseFeedGenerator automatically uses FEED_NAME for:
+        #
+        # cache/xueqiu_<UID>.json
+        # feeds/feed_xueqiu_<UID>.xml
+        # SQLite feed_name
+        #
+        # This prevents A/B/C users from sharing old articles.
+        # =====================================================
+        self.FEED_NAME = f"xueqiu_{uid}"
+
+        self.USER_INPUTS = [
+            raw_inputs[0]
+        ]
+
+        self.FEED_URL = profile_url
+
+        self._configured_uid = uid
+
+        # Reset instance-level metadata so every process starts clean.
+        self.FEED_TITLE = "Xueqiu User Posts"
+        self.FEED_DESCRIPTION = (
+            "Latest posts from Xueqiu user"
+        )
+
         super().__init__()
 
-        if not self.USER_INPUTS:
-            self.logger.warning(
-                "No users configured. "
-                "Set XUEQIU_USER_ID."
-            )
-
-            self.logger.warning(
-                "Example: "
-                "XUEQIU_USER_ID='8353550788'"
-            )
+        self.logger.info(
+            "Xueqiu isolated feed initialized: "
+            f"{self.FEED_NAME}"
+        )
 
     def fetch_articles(self) -> list[Article]:
         try:
