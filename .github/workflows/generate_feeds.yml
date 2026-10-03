@@ -51,7 +51,14 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Generate separate Xueqiu feeds
+      - name: Remove old shared Xueqiu cache
+        run: |
+          rm -f cache/xueqiu_user.json
+          rm -f feeds/feed_xueqiu_user.xml
+
+          echo "Old shared Xueqiu cache removed"
+
+      - name: Generate isolated Xueqiu feeds
         run: |
           if [ -z "$XUEQIU_USERS" ]; then
             echo "XUEQIU_USER_ID is not configured"
@@ -67,26 +74,48 @@ jobs:
               continue
             fi
 
+            if ! [[ "$UID_VALUE" =~ ^[0-9]+$ ]]; then
+              echo "Invalid Xueqiu UID: $UID_VALUE"
+              exit 1
+            fi
+
             echo "========================================"
-            echo "Generating Xueqiu RSS for UID: $UID_VALUE"
+            echo "Generating isolated Xueqiu RSS"
+            echo "UID: $UID_VALUE"
             echo "========================================"
 
             export XUEQIU_USER_ID="$UID_VALUE"
 
-            rm -f feeds/feed_xueqiu_user.xml
+            INTERNAL_FEED="feeds/feed_xueqiu_${UID_VALUE}.xml"
+            PUBLIC_FEED="feeds/xueqiu_${UID_VALUE}.xml"
+            CACHE_FILE="cache/xueqiu_${UID_VALUE}.json"
+
+            # 防止上一次遗留的临时输出被误认为本次成功生成
+            rm -f "$INTERNAL_FEED"
 
             python scripts/run_single.py xueqiu_user \
               --max "$XUEQIU_MAX_POSTS"
 
-            if [ ! -f "feeds/feed_xueqiu_user.xml" ]; then
-              echo "Feed file was not generated for UID: $UID_VALUE"
+            if [ ! -f "$INTERNAL_FEED" ]; then
+              echo "ERROR: Feed was not generated:"
+              echo "$INTERNAL_FEED"
               exit 1
             fi
 
-            mv "feeds/feed_xueqiu_user.xml" \
-               "feeds/xueqiu_${UID_VALUE}.xml"
+            if [ ! -f "$CACHE_FILE" ]; then
+              echo "ERROR: Independent cache was not generated:"
+              echo "$CACHE_FILE"
+              exit 1
+            fi
 
-            echo "Generated: feeds/xueqiu_${UID_VALUE}.xml"
+            # 保持你原来的公开 RSS 地址不变
+            mv "$INTERNAL_FEED" "$PUBLIC_FEED"
+
+            echo "Generated RSS:"
+            echo "$PUBLIC_FEED"
+
+            echo "Independent cache:"
+            echo "$CACHE_FILE"
           done
 
       - name: Validate feeds
@@ -98,15 +127,12 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-          git add feeds/
-
-          if [ -d "cache" ]; then
-            git add cache/ || true
-          fi
+          git add -A feeds/
+          git add -A cache/
 
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update Xueqiu RSS feeds [skip ci]"
+            git commit -m "Update isolated Xueqiu RSS feeds [skip ci]"
             git push
           fi
