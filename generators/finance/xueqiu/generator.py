@@ -57,12 +57,10 @@ logger = logging.getLogger(__name__)
 CN_TZ = pytz.timezone("Asia/Shanghai")
 BASE = "https://xueqiu.com"
 
-# Detail fetch pacing
 DETAIL_DELAY_RANGE = (1.5, 3.0)
 
 
 def _parse_user_input(raw: str) -> tuple[str, str]:
-    """Resolve user input into (uid, profile_url)."""
     raw = (raw or "").strip()
 
     if not raw:
@@ -87,17 +85,7 @@ def _parse_relative_time(
     text: str,
     now: Optional[datetime] = None,
 ) -> Optional[datetime]:
-    """
-    Parse Xueqiu timestamp formats into aware UTC datetime.
 
-    Examples:
-      "12分钟前"
-      "3小时前"
-      "刚刚"
-      "昨天 12:37"
-      "05-16 12:36"
-      "2024-12-15 09:30"
-    """
     text = (text or "").strip()
 
     if not text:
@@ -184,7 +172,6 @@ def _parse_relative_time(
 
 
 def _is_avatar(img: Tag) -> bool:
-    """Detect avatar images."""
     parent_classes = " ".join(
         img.parent.get("class", [])
         if img.parent
@@ -210,7 +197,6 @@ def _is_avatar(img: Tag) -> bool:
 
 
 def _normalize_img_src(src: str) -> str:
-    """Normalize protocol-relative image URLs."""
     if not src:
         return ""
 
@@ -242,9 +228,6 @@ def _extract_images(node: Tag) -> list[str]:
 
 
 def _clean_for_rss(node: Tag) -> str:
-    """
-    Strip non-content elements and return cleaned inner HTML.
-    """
     clone = BeautifulSoup(
         str(node),
         "html.parser",
@@ -270,7 +253,6 @@ def _clean_for_rss(node: Tag) -> str:
         for el in clone.select(sel):
             el.decompose()
 
-    # Remove wrapper tags used by Xueqiu
     for tag_name in ("h-char", "h-inner"):
         for el in clone.find_all(tag_name):
             el.unwrap()
@@ -311,11 +293,6 @@ def _clean_for_rss(node: Tag) -> str:
 class XueqiuUserGenerator(BaseFeedGenerator):
     """RSS generator for one isolated Xueqiu user."""
 
-    # Keep this class-level name so scripts/run_single.py can still
-    # locate this generator by the name "xueqiu_user".
-    #
-    # __init__ replaces self.FEED_NAME with xueqiu_<UID> before
-    # BaseFeedGenerator starts using cache/database paths.
     FEED_NAME = "xueqiu_user"
 
     FEED_TITLE = "Xueqiu User Posts"
@@ -361,18 +338,6 @@ class XueqiuUserGenerator(BaseFeedGenerator):
                 f"Invalid XUEQIU_USER_ID: {raw_inputs[0]}"
             )
 
-        # =====================================================
-        # IMPORTANT:
-        # Give every Xueqiu user a completely separate feed ID.
-        #
-        # BaseFeedGenerator automatically uses FEED_NAME for:
-        #
-        # cache/xueqiu_<UID>.json
-        # feeds/feed_xueqiu_<UID>.xml
-        # SQLite feed_name
-        #
-        # This prevents A/B/C users from sharing old articles.
-        # =====================================================
         self.FEED_NAME = f"xueqiu_{uid}"
 
         self.USER_INPUTS = [
@@ -380,10 +345,8 @@ class XueqiuUserGenerator(BaseFeedGenerator):
         ]
 
         self.FEED_URL = profile_url
-
         self._configured_uid = uid
 
-        # Reset instance-level metadata so every process starts clean.
         self.FEED_TITLE = "Xueqiu User Posts"
         self.FEED_DESCRIPTION = (
             "Latest posts from Xueqiu user"
@@ -466,7 +429,6 @@ class XueqiuUserGenerator(BaseFeedGenerator):
                     exc_info=True,
                 )
 
-        # Personalize feed when single user
         if (
             len(self.USER_INPUTS) == 1
             and self._first_user_name
@@ -490,6 +452,9 @@ class XueqiuUserGenerator(BaseFeedGenerator):
         webdriver,
         ChromeOptions,
     ) -> list[Article]:
+
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
 
         tmp_profile = tempfile.mkdtemp(
             prefix="selenium_xueqiu_"
@@ -534,6 +499,14 @@ class XueqiuUserGenerator(BaseFeedGenerator):
             )
 
             options.add_argument(
+                "--disable-extensions"
+            )
+
+            options.add_argument(
+                "--disable-popup-blocking"
+            )
+
+            options.add_argument(
                 f"--user-data-dir={tmp_profile}"
             )
 
@@ -545,7 +518,6 @@ class XueqiuUserGenerator(BaseFeedGenerator):
                 options=options
             )
 
-            # Hide webdriver marker
             try:
                 driver.execute_cdp_cmd(
                     "Page.addScriptToEvaluateOnNewDocument",
@@ -559,7 +531,6 @@ class XueqiuUserGenerator(BaseFeedGenerator):
                         )
                     },
                 )
-
             except Exception:
                 pass
 
@@ -569,7 +540,124 @@ class XueqiuUserGenerator(BaseFeedGenerator):
 
             driver.get(url)
 
-            time.sleep(6)
+            try:
+                WebDriverWait(
+                    driver,
+                    20,
+                ).until(
+                    lambda d:
+                    d.execute_script(
+                        "return document.readyState"
+                    ) == "complete"
+                )
+
+                self.logger.info(
+                    "Document readyState is complete"
+                )
+
+            except Exception:
+                self.logger.warning(
+                    "Timed out waiting for document readyState"
+                )
+
+            time.sleep(5)
+
+            cards = []
+
+            try:
+                WebDriverWait(
+                    driver,
+                    25,
+                ).until(
+                    lambda d:
+                    len(
+                        d.find_elements(
+                            By.TAG_NAME,
+                            "article",
+                        )
+                    ) > 0
+                )
+
+                cards = driver.find_elements(
+                    By.TAG_NAME,
+                    "article",
+                )
+
+                self.logger.info(
+                    f"Selenium found {len(cards)} article elements"
+                )
+
+            except Exception:
+                self.logger.warning(
+                    "No article elements appeared during initial wait"
+                )
+
+            if not cards:
+                self.logger.info(
+                    "Trying scroll sequence..."
+                )
+
+                for i in range(5):
+                    driver.execute_script(
+                        "window.scrollBy(0, 900);"
+                    )
+
+                    time.sleep(2)
+
+                    cards = driver.find_elements(
+                        By.TAG_NAME,
+                        "article",
+                    )
+
+                    self.logger.info(
+                        f"Scroll {i + 1}: "
+                        f"{len(cards)} article elements"
+                    )
+
+                    if cards:
+                        break
+
+            if not cards:
+                self.logger.warning(
+                    "Still no articles. Refreshing page once..."
+                )
+
+                driver.refresh()
+
+                try:
+                    WebDriverWait(
+                        driver,
+                        20,
+                    ).until(
+                        lambda d:
+                        d.execute_script(
+                            "return document.readyState"
+                        ) == "complete"
+                    )
+                except Exception:
+                    pass
+
+                time.sleep(6)
+
+                for i in range(4):
+                    cards = driver.find_elements(
+                        By.TAG_NAME,
+                        "article",
+                    )
+
+                    if cards:
+                        break
+
+                    driver.execute_script(
+                        "window.scrollBy(0, 900);"
+                    )
+
+                    time.sleep(2)
+
+                self.logger.info(
+                    "After refresh: "
+                    f"{len(cards)} article elements"
+                )
 
             html = driver.page_source
 
@@ -579,12 +667,40 @@ class XueqiuUserGenerator(BaseFeedGenerator):
                 )
                 return []
 
-            if "aliyun_waf" in html:
-                self.logger.error(
-                    f"WAF challenge not resolved "
-                    f"for {url}"
+            html_lower = html.lower()
+
+            waf_markers = [
+                "aliyun_waf",
+                "captcha",
+                "verify",
+                "验证码",
+                "访问过于频繁",
+                "安全验证",
+            ]
+
+            found_markers = [
+                marker
+                for marker in waf_markers
+                if marker.lower() in html_lower
+            ]
+
+            if found_markers:
+                self.logger.warning(
+                    "Possible anti-bot page detected: "
+                    + ", ".join(found_markers)
                 )
-                return []
+
+            self.logger.info(
+                f"Rendered HTML length: {len(html)}"
+            )
+
+            self.logger.info(
+                f"Current URL: {driver.current_url}"
+            )
+
+            self.logger.info(
+                f"Page title: {driver.title}"
+            )
 
             soup = BeautifulSoup(
                 html,
@@ -608,6 +724,14 @@ class XueqiuUserGenerator(BaseFeedGenerator):
                 "timeline cards on list page"
             )
 
+            if not arts:
+                self.logger.error(
+                    "No timeline cards found after wait, "
+                    "scroll and refresh."
+                )
+
+                return []
+
             parsed: list[Article] = []
 
             now = datetime.now(CN_TZ)
@@ -630,8 +754,6 @@ class XueqiuUserGenerator(BaseFeedGenerator):
                 if not info:
                     continue
 
-                # Long-form posts:
-                # fetch detail page
                 if info["is_longtext"]:
                     time.sleep(
                         random.uniform(
@@ -849,9 +971,7 @@ class XueqiuUserGenerator(BaseFeedGenerator):
         driver,
         detail_url: str,
     ) -> Optional[str]:
-        """
-        Navigate to detail page using Selenium.
-        """
+
         try:
             driver.get(detail_url)
 
