@@ -5,301 +5,455 @@
 """
 Xueqiu (雪球) User Feed Generator.
 
-Uses Selenium headless Chrome to fetch Xueqiu user timeline pages,
-then parses the timeline HTML directly.
+This version does NOT use Selenium.
 
-Configuration:
+Flow:
 
-1. XUEQIU_USER_ID env var.
-   Exactly one user must be provided per process.
+    CookieCloud
+        ↓
+    decrypt Xueqiu cookies
+        ↓
+    api.xueqiu.com
+        ↓
+    isolated RSS for one Xueqiu UID
 
-   Accepts:
-   - pure uid     "8353550788"
-   - full URL     "https://xueqiu.com/u/8353550788"
+Environment variables:
 
-2. Optional: XUEQIU_MAX_POSTS (default 20)
+    XUEQIU_USER_ID
+    XUEQIU_MAX_POSTS
 
-Example:
-    XUEQIU_USER_ID="8353550788" python scripts/run_single.py xueqiu_user
+    COOKIECLOUD_URL
+    COOKIECLOUD_UUID
+    COOKIECLOUD_PASSWORD
 
-Each user is isolated into its own ForgeRSS feed identity:
+Each process handles exactly one Xueqiu UID.
+
+Each user gets an independent feed identity:
 
     xueqiu_<UID>
 
-Therefore each user gets its own:
+Therefore BaseFeedGenerator automatically creates:
 
     cache/xueqiu_<UID>.json
     feeds/feed_xueqiu_<UID>.xml
 
-and its own SQLite feed_name.
+and uses an independent SQLite feed_name.
 """
 
+import base64
+import hashlib
+import json
 import logging
 import os
-import random
 import re
-import shutil
-import tempfile
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from html import escape as html_escape
 from typing import Optional
-from urllib.parse import urljoin
 
 import pytz
-from bs4 import BeautifulSoup, Tag
+import requests
+from bs4 import BeautifulSoup
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
 
 from generators.base import Article, BaseFeedGenerator
 
 
 logger = logging.getLogger(__name__)
 
-CN_TZ = pytz.timezone("Asia/Shanghai")
-BASE = "https://xueqiu.com"
+BASE_URL = "https://xueqiu.com"
+API_URL = "https://api.xueqiu.com"
 
-DETAIL_DELAY_RANGE = (1.5, 3.0)
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/140.0.0.0 Safari/537.36"
+)
 
 
 def _parse_user_input(raw: str) -> tuple[str, str]:
+    """
+    Resolve user input into:
+
+        (uid, profile_url)
+    """
+
     raw = (raw or "").strip()
 
     if not raw:
         return "", ""
 
     if raw.startswith(("http://", "https://")):
-        m = re.search(r"/u/(\d+)", raw)
+        match = re.search(r"/u/(\d+)", raw)
 
-        if m:
-            uid = m.group(1)
-            return uid, f"{BASE}/u/{uid}"
+        if match:
+            uid = match.group(1)
 
-        return raw, raw
+            return (
+                uid,
+                f"{BASE_URL}/u/{uid}",
+            )
+
+        return "", ""
 
     if raw.isdigit():
-        return raw, f"{BASE}/u/{raw}"
-
-    return raw, f"{BASE}/{raw}"
-
-
-def _parse_relative_time(
-    text: str,
-    now: Optional[datetime] = None,
-) -> Optional[datetime]:
-
-    text = (text or "").strip()
-
-    if not text:
-        return None
-
-    now = now or datetime.now(CN_TZ)
-
-    if "刚刚" in text:
-        return now.astimezone(pytz.UTC)
-
-    m = re.match(r"(\d+)\s*分钟前", text)
-    if m:
         return (
-            now - timedelta(minutes=int(m.group(1)))
-        ).astimezone(pytz.UTC)
+            raw,
+            f"{BASE_URL}/u/{raw}",
+        )
 
-    m = re.match(r"(\d+)\s*小时前", text)
-    if m:
-        return (
-            now - timedelta(hours=int(m.group(1)))
-        ).astimezone(pytz.UTC)
+    return "", ""
 
-    m = re.match(r"昨天\s+(\d{1,2}):(\d{2})", text)
-    if m:
-        y = now - timedelta(days=1)
 
-        return CN_TZ.localize(
-            datetime(
-                y.year,
-                y.month,
-                y.day,
-                int(m.group(1)),
-                int(m.group(2)),
-            )
-        ).astimezone(pytz.UTC)
+def _evp_bytes_to_key(
+    password: bytes,
+    salt: bytes,
+) -> tuple[bytes, bytes]:
+    """
+    OpenSSL-compatible EVP_BytesToKey.
 
-    m = re.match(r"前天\s+(\d{1,2}):(\d{2})", text)
-    if m:
-        y = now - timedelta(days=2)
+    CryptoJS AES passphrase mode derives:
 
-        return CN_TZ.localize(
-            datetime(
-                y.year,
-                y.month,
-                y.day,
-                int(m.group(1)),
-                int(m.group(2)),
-            )
-        ).astimezone(pytz.UTC)
+        32-byte AES key
+        16-byte IV
 
-    m = re.match(
-        r"(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})",
-        text,
+    using MD5.
+    """
+
+    derived = b""
+    block = b""
+
+    while len(derived) < 48:
+        block = hashlib.md5(
+            block + password + salt
+        ).digest()
+
+        derived += block
+
+    key = derived[:32]
+    iv = derived[32:48]
+
+    return key, iv
+
+
+def _decrypt_cookiecloud(
+    uuid: str,
+    password: str,
+    encrypted: str,
+) -> dict:
+    """
+    Decrypt CookieCloud encrypted payload.
+    """
+
+    passphrase = hashlib.md5(
+        f"{uuid}-{password}".encode("utf-8")
+    ).hexdigest()[:16]
+
+    raw = base64.b64decode(encrypted)
+
+    if len(raw) < 16:
+        raise ValueError(
+            "CookieCloud encrypted data is too short"
+        )
+
+    if raw[:8] != b"Salted__":
+        raise ValueError(
+            "CookieCloud encrypted data has invalid header"
+        )
+
+    salt = raw[8:16]
+    ciphertext = raw[16:]
+
+    key, iv = _evp_bytes_to_key(
+        passphrase.encode("utf-8"),
+        salt,
     )
 
-    if m:
-        return CN_TZ.localize(
-            datetime(
-                int(m.group(1)),
-                int(m.group(2)),
-                int(m.group(3)),
-                int(m.group(4)),
-                int(m.group(5)),
-            )
-        ).astimezone(pytz.UTC)
-
-    m = re.match(
-        r"(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})",
-        text,
+    cipher = AES.new(
+        key,
+        AES.MODE_CBC,
+        iv,
     )
 
-    if m:
-        return CN_TZ.localize(
-            datetime(
-                now.year,
-                int(m.group(1)),
-                int(m.group(2)),
-                int(m.group(3)),
-                int(m.group(4)),
-            )
-        ).astimezone(pytz.UTC)
-
-    return None
-
-
-def _is_avatar(img: Tag) -> bool:
-    parent_classes = " ".join(
-        img.parent.get("class", [])
-        if img.parent
-        else []
+    decrypted = unpad(
+        cipher.decrypt(ciphertext),
+        AES.block_size,
     )
 
-    if "avatar" in parent_classes.lower():
-        return True
-
-    src = (
-        img.get("src")
-        or img.get("data-src")
-        or ""
-    ).lower()
-
-    if "xavatar.imedao.com" in src:
-        return True
-
-    if "/profiles/" in src and "identity_icon" in src:
-        return True
-
-    return False
+    return json.loads(
+        decrypted.decode("utf-8")
+    )
 
 
-def _normalize_img_src(src: str) -> str:
-    if not src:
+def _load_cookiecloud_payload() -> dict:
+    """
+    Download and decrypt CookieCloud payload.
+
+    Secrets are read only from environment variables.
+    They are never printed.
+    """
+
+    server = (
+        os.environ.get(
+            "COOKIECLOUD_URL",
+            "",
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+    uuid = os.environ.get(
+        "COOKIECLOUD_UUID",
+        "",
+    ).strip()
+
+    password = os.environ.get(
+        "COOKIECLOUD_PASSWORD",
+        "",
+    )
+
+    if not server:
+        raise RuntimeError(
+            "COOKIECLOUD_URL is missing"
+        )
+
+    if not uuid:
+        raise RuntimeError(
+            "COOKIECLOUD_UUID is missing"
+        )
+
+    if not password:
+        raise RuntimeError(
+            "COOKIECLOUD_PASSWORD is missing"
+        )
+
+    url = f"{server}/get/{uuid}"
+
+    logger.info(
+        "Downloading encrypted cookies from CookieCloud"
+    )
+
+    response = requests.get(
+        url,
+        timeout=30,
+    )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    encrypted = data.get("encrypted")
+
+    if not encrypted:
+        raise RuntimeError(
+            "CookieCloud response has no encrypted data"
+        )
+
+    payload = _decrypt_cookiecloud(
+        uuid,
+        password,
+        encrypted,
+    )
+
+    logger.info(
+        "CookieCloud data decrypted successfully"
+    )
+
+    return payload
+
+
+def _get_xueqiu_cookies() -> list[dict]:
+    """
+    Extract only Xueqiu cookies from CookieCloud.
+
+    Supports CookieCloud payload format:
+
+        {
+            "cookie_data": {
+                ".xueqiu.com": [...],
+                "xueqiu.com": [...]
+            }
+        }
+    """
+
+    payload = _load_cookiecloud_payload()
+
+    cookie_data = payload.get(
+        "cookie_data",
+        {},
+    )
+
+    if not isinstance(cookie_data, dict):
+        raise RuntimeError(
+            "CookieCloud cookie_data is invalid"
+        )
+
+    result: list[dict] = []
+
+    for domain_key, cookies in cookie_data.items():
+        domain_text = str(
+            domain_key or ""
+        ).lower()
+
+        if "xueqiu.com" not in domain_text:
+            continue
+
+        if not isinstance(cookies, list):
+            continue
+
+        for cookie in cookies:
+            if not isinstance(cookie, dict):
+                continue
+
+            name = cookie.get("name")
+            value = cookie.get("value")
+
+            if not name:
+                continue
+
+            if value is None:
+                continue
+
+            cookie_domain = str(
+                cookie.get("domain")
+                or domain_key
+                or ""
+            ).lower()
+
+            if "xueqiu.com" not in cookie_domain:
+                continue
+
+            result.append(cookie)
+
+    if not result:
+        raise RuntimeError(
+            "No Xueqiu cookies found in CookieCloud"
+        )
+
+    logger.info(
+        f"Loaded {len(result)} Xueqiu cookies "
+        "from CookieCloud"
+    )
+
+    return result
+
+
+def _build_cookie_header(
+    cookies: list[dict],
+) -> str:
+    """
+    Build Cookie header manually.
+
+    We deliberately build the header ourselves instead
+    of relying on browser cookie-domain matching because
+    the API host is api.xueqiu.com.
+    """
+
+    cookie_map: dict[str, str] = {}
+
+    for cookie in cookies:
+        name = str(
+            cookie.get("name")
+            or ""
+        ).strip()
+
+        value = str(
+            cookie.get("value")
+            or ""
+        )
+
+        if not name:
+            continue
+
+        cookie_map[name] = value
+
+    if not cookie_map:
+        raise RuntimeError(
+            "Xueqiu cookie header is empty"
+        )
+
+    return "; ".join(
+        f"{name}={value}"
+        for name, value in cookie_map.items()
+    )
+
+
+def _strip_html(value: str) -> str:
+    """
+    Convert HTML into plain text.
+    """
+
+    if not value:
         return ""
 
-    if src.startswith("//"):
-        return "https:" + src
-
-    return src
-
-
-def _extract_images(node: Tag) -> list[str]:
-    out = []
-    seen = set()
-
-    for img in node.find_all("img"):
-        if _is_avatar(img):
-            continue
-
-        src = _normalize_img_src(
-            img.get("src")
-            or img.get("data-src")
-            or ""
-        )
-
-        if src and src not in seen:
-            seen.add(src)
-            out.append(src)
-
-    return out
-
-
-def _clean_for_rss(node: Tag) -> str:
-    clone = BeautifulSoup(
-        str(node),
+    return BeautifulSoup(
+        value,
         "html.parser",
+    ).get_text(
+        " ",
+        strip=True,
     )
 
-    drop_selectors = [
-        ".fake-anchor",
-        ".timeline__unfold__control",
-        ".timeline__expand__control",
-        ".timeline__forward__unfold__control",
-        ".timeline__item__control",
-        ".timeline__item__forward__editor",
-        ".timeline__item__info",
-        ".timeline__item__ft",
-        ".timeline__item__top__right",
-        "script",
-        "style",
-        '[style*="display:none"]',
-        '[style*="display: none"]',
-    ]
 
-    for sel in drop_selectors:
-        for el in clone.select(sel):
-            el.decompose()
+def _normalize_target(
+    target: str,
+    uid: str,
+    status_id: str,
+) -> str:
+    """
+    Convert Xueqiu target to absolute URL.
+    """
 
-    for tag_name in ("h-char", "h-inner"):
-        for el in clone.find_all(tag_name):
-            el.unwrap()
+    target = (
+        target
+        or ""
+    ).strip()
 
-    for img in clone.find_all("img"):
-        if _is_avatar(img):
-            img.decompose()
-            continue
+    if target.startswith(
+        ("http://", "https://")
+    ):
+        return target
 
-        src = _normalize_img_src(
-            img.get("src")
-            or img.get("data-src")
-            or ""
+    if target.startswith("/"):
+        return BASE_URL + target
+
+    if status_id:
+        return (
+            f"{BASE_URL}/"
+            f"{uid}/"
+            f"{status_id}"
         )
 
-        if src:
-            img["src"] = src
-
-        img["style"] = (
-            "max-width:100%;"
-            "height:auto;"
-            "border-radius:6px;"
-            "margin:6px 0"
-        )
-
-    for a in clone.find_all("a", href=True):
-        href = a["href"]
-
-        if href.startswith("/"):
-            a["href"] = urljoin(
-                BASE + "/",
-                href,
-            )
-
-    return clone.decode_contents().strip()
+    return (
+        f"{BASE_URL}/u/{uid}"
+    )
 
 
-class XueqiuUserGenerator(BaseFeedGenerator):
-    """RSS generator for one isolated Xueqiu user."""
+class XueqiuUserGenerator(
+    BaseFeedGenerator
+):
+    """
+    RSS generator for one isolated Xueqiu user.
+    """
 
+    # Keep the class-level name.
+    #
+    # scripts/run_single.py uses this value to locate
+    # the generator by the name "xueqiu_user".
+    #
+    # __init__ replaces the instance FEED_NAME with
+    # xueqiu_<UID>.
     FEED_NAME = "xueqiu_user"
 
     FEED_TITLE = "Xueqiu User Posts"
     FEED_URL = "https://xueqiu.com/"
-    FEED_DESCRIPTION = "Latest posts from Xueqiu user"
+    FEED_DESCRIPTION = (
+        "Latest posts from Xueqiu user"
+    )
     FEED_LANGUAGE = "zh-CN"
-    FEED_LOGO = "https://xueqiu.com/favicon.ico"
+    FEED_LOGO = (
+        "https://xueqiu.com/favicon.ico"
+    )
 
     MAX_POSTS = int(
         os.environ.get(
@@ -310,47 +464,66 @@ class XueqiuUserGenerator(BaseFeedGenerator):
 
     def __init__(self):
         raw_inputs = [
-            u.strip()
-            for u in os.environ.get(
+            value.strip()
+            for value in os.environ.get(
                 "XUEQIU_USER_ID",
                 "",
             ).split(",")
-            if u.strip()
+            if value.strip()
         ]
 
         if not raw_inputs:
             raise ValueError(
-                "XUEQIU_USER_ID is not configured."
+                "XUEQIU_USER_ID is not configured"
             )
 
         if len(raw_inputs) != 1:
             raise ValueError(
-                "Xueqiu isolated feed mode requires exactly "
-                "one XUEQIU_USER_ID per process."
+                "Xueqiu isolated feed mode "
+                "requires exactly one "
+                "XUEQIU_USER_ID per process"
             )
 
-        uid, profile_url = _parse_user_input(
-            raw_inputs[0]
+        uid, profile_url = (
+            _parse_user_input(
+                raw_inputs[0]
+            )
         )
 
-        if not uid or not uid.isdigit():
+        if not uid:
             raise ValueError(
-                f"Invalid XUEQIU_USER_ID: {raw_inputs[0]}"
+                "Invalid XUEQIU_USER_ID: "
+                f"{raw_inputs[0]}"
             )
 
-        self.FEED_NAME = f"xueqiu_{uid}"
+        if not uid.isdigit():
+            raise ValueError(
+                "XUEQIU_USER_ID must be numeric"
+            )
 
-        self.USER_INPUTS = [
-            raw_inputs[0]
-        ]
+        # Critical isolation setting.
+        #
+        # BaseFeedGenerator will now use:
+        #
+        # cache/xueqiu_<UID>.json
+        # feeds/feed_xueqiu_<UID>.xml
+        # SQLite feed_name=xueqiu_<UID>
+        self.FEED_NAME = (
+            f"xueqiu_{uid}"
+        )
 
         self.FEED_URL = profile_url
-        self._configured_uid = uid
 
-        self.FEED_TITLE = "Xueqiu User Posts"
-        self.FEED_DESCRIPTION = (
-            "Latest posts from Xueqiu user"
+        self.FEED_TITLE = (
+            f"雪球用户 {uid}"
         )
+
+        self.FEED_DESCRIPTION = (
+            f"雪球用户 {uid} 的最新动态"
+        )
+
+        self._uid = uid
+        self._profile_url = profile_url
 
         super().__init__()
 
@@ -359,21 +532,405 @@ class XueqiuUserGenerator(BaseFeedGenerator):
             f"{self.FEED_NAME}"
         )
 
-    def fetch_articles(self) -> list[Article]:
-        try:
-            from selenium import webdriver
-            from selenium.webdriver.chrome.options import (
-                Options as ChromeOptions,
+    def _request_timeline(
+        self,
+        max_posts: int,
+    ) -> list[dict]:
+        """
+        Fetch timeline directly from api.xueqiu.com.
+        """
+
+        cookies = (
+            _get_xueqiu_cookies()
+        )
+
+        cookie_header = (
+            _build_cookie_header(
+                cookies
+            )
+        )
+
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Accept": (
+                "application/json, "
+                "text/plain, */*"
+            ),
+            "Referer": (
+                self._profile_url
+            ),
+            "Origin": BASE_URL,
+            "Cookie": cookie_header,
+            "Connection": "keep-alive",
+        }
+
+        params = {
+            "user_id": self._uid,
+            "type": 10,
+            "source": "",
+            "page": 1,
+            "count": min(
+                max(
+                    max_posts,
+                    1,
+                ),
+                20,
+            ),
+        }
+
+        url = (
+            f"{API_URL}"
+            "/v4/statuses/"
+            "user_timeline.json"
+        )
+
+        self.logger.info(
+            "Requesting Xueqiu timeline API"
+        )
+
+        response = requests.get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=30,
+        )
+
+        self.logger.info(
+            "Xueqiu API HTTP status: "
+            f"{response.status_code}"
+        )
+
+        if response.status_code != 200:
+            body_preview = (
+                response.text[:200]
+                .replace("\n", " ")
             )
 
-        except ImportError:
             self.logger.error(
-                "Selenium not installed. "
-                "Run: pip install selenium"
+                "Xueqiu API request failed. "
+                f"Response preview: "
+                f"{body_preview}"
             )
-            return []
 
-        per_user_cap = self.MAX_POSTS
+            response.raise_for_status()
+
+        try:
+            data = response.json()
+
+        except Exception as exc:
+            raise RuntimeError(
+                "Xueqiu API did not return JSON"
+            ) from exc
+
+        if isinstance(data, dict):
+            error_code = data.get(
+                "error_code"
+            )
+
+            error_description = data.get(
+                "error_description"
+            )
+
+            if error_code:
+                raise RuntimeError(
+                    "Xueqiu API error "
+                    f"{error_code}: "
+                    f"{error_description}"
+                )
+
+        statuses = data.get(
+            "statuses",
+            [],
+        )
+
+        if not isinstance(
+            statuses,
+            list,
+        ):
+            raise RuntimeError(
+                "Xueqiu API statuses "
+                "is not a list"
+            )
+
+        # Remove pinned posts, same behaviour
+        # as current RSSHub route.
+        statuses = [
+            status
+            for status in statuses
+            if status.get("mark") != 1
+        ]
+
+        self.logger.info(
+            f"Xueqiu API returned "
+            f"{len(statuses)} posts"
+        )
+
+        return statuses[
+            :max_posts
+        ]
+
+    def _status_to_article(
+        self,
+        status: dict,
+    ) -> Optional[Article]:
+        """
+        Convert one API status into ForgeRSS Article.
+        """
+
+        status_id = str(
+            status.get("id")
+            or ""
+        )
+
+        target = _normalize_target(
+            str(
+                status.get(
+                    "target"
+                )
+                or ""
+            ),
+            self._uid,
+            status_id,
+        )
+
+        if not target:
+            return None
+
+        user = (
+            status.get("user")
+            or {}
+        )
+
+        author = (
+            user.get("screen_name")
+            or self._uid
+        )
+
+        created_at = status.get(
+            "created_at"
+        )
+
+        if created_at:
+            try:
+                timestamp = (
+                    float(created_at)
+                    / 1000
+                )
+
+                published_at = (
+                    datetime.fromtimestamp(
+                        timestamp,
+                        tz=pytz.UTC,
+                    )
+                )
+
+            except Exception:
+                published_at = (
+                    datetime.now(
+                        pytz.UTC
+                    )
+                )
+
+        else:
+            published_at = (
+                datetime.now(
+                    pytz.UTC
+                )
+            )
+
+        title = str(
+            status.get("title")
+            or ""
+        ).strip()
+
+        description = str(
+            status.get(
+                "description"
+            )
+            or ""
+        )
+
+        text = str(
+            status.get("text")
+            or ""
+        )
+
+        body_html = (
+            text
+            or description
+        )
+
+        if not title:
+            plain = _strip_html(
+                description
+                or text
+            )
+
+            if len(plain) > 80:
+                title = (
+                    plain[:80]
+                    + "…"
+                )
+
+            else:
+                title = plain
+
+        if not title:
+            title = (
+                f"雪球动态 "
+                f"{status_id}"
+            )
+
+        images: list[str] = []
+
+        image_info_list = (
+            status.get(
+                "image_info_list"
+            )
+            or []
+        )
+
+        if isinstance(
+            image_info_list,
+            list,
+        ):
+            for image in image_info_list:
+                if not isinstance(
+                    image,
+                    dict,
+                ):
+                    continue
+
+                filename = (
+                    image.get(
+                        "filename"
+                    )
+                )
+
+                if not filename:
+                    continue
+
+                image_url = (
+                    "https://xqimg.imedao.com/"
+                    + str(filename)
+                )
+
+                if image_url in images:
+                    continue
+
+                images.append(
+                    image_url
+                )
+
+        retweeted = status.get(
+            "retweeted_status"
+        )
+
+        if isinstance(
+            retweeted,
+            dict,
+        ):
+            retweet_user = (
+                retweeted.get(
+                    "user"
+                )
+                or {}
+            )
+
+            retweet_author = (
+                retweet_user.get(
+                    "screen_name"
+                )
+                or ""
+            )
+
+            retweet_text = str(
+                retweeted.get(
+                    "text"
+                )
+                or retweeted.get(
+                    "description"
+                )
+                or ""
+            )
+
+            if retweet_text:
+                body_html += (
+                    "<blockquote>"
+                )
+
+                if retweet_author:
+                    body_html += (
+                        "<strong>"
+                        + html_escape(
+                            retweet_author
+                        )
+                        + "：</strong>"
+                    )
+
+                body_html += (
+                    retweet_text
+                    + "</blockquote>"
+                )
+
+        if images:
+            image_html = []
+
+            for image_url in images:
+                image_html.append(
+                    '<p>'
+                    f'<img src="{html_escape(image_url)}" '
+                    'style="max-width:100%;'
+                    'height:auto;'
+                    'border-radius:6px">'
+                    '</p>'
+                )
+
+            body_html += (
+                "\n"
+                + "\n".join(
+                    image_html
+                )
+            )
+
+        body_html = (
+            '<div style="'
+            'font-size:16px;'
+            'line-height:1.8;'
+            'color:#333">'
+            + body_html
+            + '<p style="margin-top:16px">'
+            + f'<a href="{html_escape(target)}" '
+            + 'style="color:#ff7d00">'
+            + '在雪球查看 &rarr;'
+            + '</a>'
+            + '</p>'
+            + '</div>'
+        )
+
+        return Article(
+            url=target,
+            title=title,
+            published_at=(
+                published_at
+            ),
+            content=body_html,
+            summary=None,
+            author=author,
+            images=images,
+            category="雪球",
+        )
+
+    def fetch_articles(
+        self,
+    ) -> list[Article]:
+        """
+        BaseFeedGenerator entry point.
+        """
+
+        max_posts = (
+            self.MAX_POSTS
+        )
 
         run_cap = getattr(
             self,
@@ -383,792 +940,92 @@ class XueqiuUserGenerator(BaseFeedGenerator):
 
         if (
             run_cap is not None
-            and run_cap < per_user_cap
+            and run_cap > 0
         ):
-            self.logger.info(
-                f"Run cap (--max {run_cap}) overrides "
-                f"XUEQIU_MAX_POSTS={per_user_cap}"
+            max_posts = min(
+                max_posts,
+                run_cap,
             )
 
-            per_user_cap = run_cap
+        if max_posts <= 0:
+            max_posts = 20
 
-        all_articles: list[Article] = []
-
-        self._first_user_name: Optional[str] = None
-
-        for raw in self.USER_INPUTS:
-            uid, url = _parse_user_input(raw)
-
-            if not url:
-                continue
-
-            self.logger.info(
-                f"Fetching xueqiu user "
-                f"{uid} ({url})"
+        statuses = (
+            self._request_timeline(
+                max_posts
             )
-
-            try:
-                items = self._fetch_user(
-                    uid,
-                    url,
-                    per_user_cap,
-                    webdriver,
-                    ChromeOptions,
-                )
-
-                all_articles.extend(items)
-
-                self.logger.info(
-                    f"Got {len(items)} posts "
-                    f"for {uid}"
-                )
-
-            except Exception as e:
-                self.logger.error(
-                    f"Failed to fetch user {uid}: {e}",
-                    exc_info=True,
-                )
-
-        if (
-            len(self.USER_INPUTS) == 1
-            and self._first_user_name
-        ):
-            self.FEED_TITLE = (
-                f"{self._first_user_name} (雪球)"
-            )
-
-            self.FEED_DESCRIPTION = (
-                f"{self._first_user_name}"
-                " 在雪球的最新动态"
-            )
-
-        return all_articles
-
-    def _fetch_user(
-        self,
-        uid: str,
-        url: str,
-        max_posts: int,
-        webdriver,
-        ChromeOptions,
-    ) -> list[Article]:
-
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-
-        tmp_profile = tempfile.mkdtemp(
-            prefix="selenium_xueqiu_"
         )
 
-        driver = None
-
-        try:
-            options = ChromeOptions()
-
-            options.binary_location = (
-                "/usr/bin/google-chrome"
-            )
-
-            options.add_argument(
-                "--headless=new"
-            )
-
-            options.add_argument(
-                "--no-sandbox"
-            )
-
-            options.add_argument(
-                "--disable-dev-shm-usage"
-            )
-
-            options.add_argument(
-                "--disable-gpu"
-            )
-
-            options.add_argument(
-                "--window-size=1920,1080"
-            )
-
-            options.add_argument(
-                "--disable-blink-features="
-                "AutomationControlled"
-            )
-
-            options.add_argument(
-                "--lang=zh-CN"
-            )
-
-            options.add_argument(
-                "--disable-extensions"
-            )
-
-            options.add_argument(
-                "--disable-popup-blocking"
-            )
-
-            options.add_argument(
-                f"--user-data-dir={tmp_profile}"
-            )
-
-            self.logger.info(
-                "Starting Selenium Chrome"
-            )
-
-            driver = webdriver.Chrome(
-                options=options
-            )
-
-            try:
-                driver.execute_cdp_cmd(
-                    "Page.addScriptToEvaluateOnNewDocument",
-                    {
-                        "source": (
-                            "Object.defineProperty("
-                            "navigator,"
-                            "'webdriver',"
-                            "{get:()=>undefined}"
-                            ");"
-                        )
-                    },
-                )
-            except Exception:
-                pass
-
-            self.logger.info(
-                f"Opening Xueqiu user page: {url}"
-            )
-
-            driver.get(url)
-
-            try:
-                WebDriverWait(
-                    driver,
-                    20,
-                ).until(
-                    lambda d:
-                    d.execute_script(
-                        "return document.readyState"
-                    ) == "complete"
-                )
-
-                self.logger.info(
-                    "Document readyState is complete"
-                )
-
-            except Exception:
-                self.logger.warning(
-                    "Timed out waiting for document readyState"
-                )
-
-            time.sleep(5)
-
-            cards = []
-
-            try:
-                WebDriverWait(
-                    driver,
-                    25,
-                ).until(
-                    lambda d:
-                    len(
-                        d.find_elements(
-                            By.TAG_NAME,
-                            "article",
-                        )
-                    ) > 0
-                )
-
-                cards = driver.find_elements(
-                    By.TAG_NAME,
-                    "article",
-                )
-
-                self.logger.info(
-                    f"Selenium found {len(cards)} article elements"
-                )
-
-            except Exception:
-                self.logger.warning(
-                    "No article elements appeared during initial wait"
-                )
-
-            if not cards:
-                self.logger.info(
-                    "Trying scroll sequence..."
-                )
-
-                for i in range(5):
-                    driver.execute_script(
-                        "window.scrollBy(0, 900);"
-                    )
-
-                    time.sleep(2)
-
-                    cards = driver.find_elements(
-                        By.TAG_NAME,
-                        "article",
-                    )
-
-                    self.logger.info(
-                        f"Scroll {i + 1}: "
-                        f"{len(cards)} article elements"
-                    )
-
-                    if cards:
-                        break
-
-            if not cards:
-                self.logger.warning(
-                    "Still no articles. Refreshing page once..."
-                )
-
-                driver.refresh()
-
-                try:
-                    WebDriverWait(
-                        driver,
-                        20,
-                    ).until(
-                        lambda d:
-                        d.execute_script(
-                            "return document.readyState"
-                        ) == "complete"
-                    )
-                except Exception:
-                    pass
-
-                time.sleep(6)
-
-                for i in range(4):
-                    cards = driver.find_elements(
-                        By.TAG_NAME,
-                        "article",
-                    )
-
-                    if cards:
-                        break
-
-                    driver.execute_script(
-                        "window.scrollBy(0, 900);"
-                    )
-
-                    time.sleep(2)
-
-                self.logger.info(
-                    "After refresh: "
-                    f"{len(cards)} article elements"
-                )
-
-            html = driver.page_source
-
-            if not html:
-                self.logger.error(
-                    f"Empty HTML returned for {url}"
-                )
-                return []
-
-            html_lower = html.lower()
-
-            waf_markers = [
-                "aliyun_waf",
-                "captcha",
-                "verify",
-                "验证码",
-                "访问过于频繁",
-                "安全验证",
-            ]
-
-            found_markers = [
-                marker
-                for marker in waf_markers
-                if marker.lower() in html_lower
-            ]
-
-            if found_markers:
-                self.logger.warning(
-                    "Possible anti-bot page detected: "
-                    + ", ".join(found_markers)
-                )
-
-            self.logger.info(
-                f"Rendered HTML length: {len(html)}"
-            )
-
-            self.logger.info(
-                f"Current URL: {driver.current_url}"
-            )
-
-            self.logger.info(
-                f"Page title: {driver.title}"
-            )
-
-            soup = BeautifulSoup(
-                html,
-                "html.parser",
-            )
-
-            user_name = self._extract_user_name(
-                soup
-            )
-
-            if (
-                user_name
-                and self._first_user_name is None
-            ):
-                self._first_user_name = user_name
-
-            arts = soup.find_all("article")
-
-            self.logger.info(
-                f"Found {len(arts)} "
-                "timeline cards on list page"
-            )
-
-            if not arts:
-                self.logger.error(
-                    "No timeline cards found after wait, "
-                    "scroll and refresh."
-                )
-
-                return []
-
-            parsed: list[Article] = []
-
-            now = datetime.now(CN_TZ)
-
-            for art in arts[:max_posts]:
-                try:
-                    info = self._parse_card(
-                        art,
-                        uid,
-                        user_name,
-                        now,
-                    )
-
-                except Exception as e:
-                    self.logger.debug(
-                        f"Failed to parse a card: {e}"
-                    )
-                    continue
-
-                if not info:
-                    continue
-
-                if info["is_longtext"]:
-                    time.sleep(
-                        random.uniform(
-                            *DETAIL_DELAY_RANGE
-                        )
-                    )
-
-                    detail_html = (
-                        self._fetch_detail(
-                            driver,
-                            info["url"],
-                        )
-                    )
-
-                    if detail_html:
-                        info = (
-                            self._enrich_with_detail(
-                                info,
-                                detail_html,
-                            )
-                        )
-
-                parsed.append(
-                    self._build_article(info)
-                )
-
-            return parsed
-
-        except Exception as e:
-            self.logger.error(
-                f"Selenium fetch failed "
-                f"for {uid}: {e}",
-                exc_info=True,
+        if not statuses:
+            self.logger.warning(
+                "Xueqiu API returned "
+                "no statuses"
             )
 
             return []
 
-        finally:
-            if driver is not None:
-                try:
-                    driver.quit()
-                except Exception:
-                    pass
-
-            shutil.rmtree(
-                tmp_profile,
-                ignore_errors=True,
+        first_user = (
+            statuses[0].get(
+                "user"
             )
-
-    def _extract_user_name(
-        self,
-        soup: BeautifulSoup,
-    ) -> Optional[str]:
-
-        t = soup.find("title")
-
-        if t and t.text:
-            name = (
-                t.text
-                .replace("\xa0", " ")
-                .strip()
-            )
-
-            name = re.sub(
-                r"\s*-\s*雪球\s*$",
-                "",
-                name,
-            ).strip()
-
-            if name:
-                return name
-
-        return None
-
-    def _parse_card(
-        self,
-        art: Tag,
-        feed_uid: str,
-        feed_user_name: Optional[str],
-        now: datetime,
-    ) -> Optional[dict]:
-
-        date_el = art.select_one(
-            ".timeline__item__info "
-            ".date-and-source"
+            or {}
         )
 
-        status_id = (
-            date_el.get("data-id")
-            if date_el
-            else None
-        ) or ""
+        user_name = (
+            first_user.get(
+                "screen_name"
+            )
+        )
 
-        if not status_id:
-            for a in art.find_all(
-                "a",
-                href=True,
-            ):
-                m = re.match(
-                    rf"^/{feed_uid}/(\d+)$",
-                    a["href"],
+        if user_name:
+            self.FEED_TITLE = (
+                f"{user_name} (雪球)"
+            )
+
+            self.FEED_DESCRIPTION = (
+                f"{user_name}"
+                " 在雪球的最新动态"
+            )
+
+        articles: list[Article] = []
+
+        for status in statuses:
+            try:
+                article = (
+                    self._status_to_article(
+                        status
+                    )
                 )
 
-                if m:
-                    status_id = m.group(1)
-                    break
+                if article:
+                    articles.append(
+                        article
+                    )
 
-        if not status_id:
-            return None
-
-        post_url = (
-            f"{BASE}/"
-            f"{feed_uid}/"
-            f"{status_id}"
-        )
-
-        author_name = (
-            feed_user_name
-            or feed_uid
-        )
-
-        time_text = (
-            date_el.get_text(
-                " ",
-                strip=True,
-            )
-            if date_el
-            else ""
-        )
-
-        time_text_clean = re.split(
-            r"·|\s来自",
-            time_text,
-            maxsplit=1,
-        )[0].strip()
-
-        published_at = (
-            _parse_relative_time(
-                time_text_clean,
-                now,
-            )
-            or now.astimezone(pytz.UTC)
-        )
-
-        title_el = art.select_one(
-            ".timeline__item__title"
-        )
-
-        is_longtext = bool(
-            title_el
-            and title_el.get_text(strip=True)
-        )
-
-        forward_el = art.select_one(
-            ".timeline__item__forward"
-        )
-
-        has_quote = bool(forward_el)
-
-        body_el = (
-            art.select_one(
-                ".timeline__item__bd"
-            )
-            or art.select_one(
-                ".timeline__item__main"
-            )
-            or art
-        )
-
-        main_text_el = art.select_one(
-            ".timeline__item__bd "
-            "> .timeline__item__content"
-        )
-
-        main_text = (
-            main_text_el.get_text(
-                " ",
-                strip=True,
-            )
-            if main_text_el
-            else ""
-        )
-
-        title = (
-            title_el.get_text(strip=True)
-            if title_el
-            else None
-        )
-
-        content_html = _clean_for_rss(
-            body_el
-        )
-
-        images = _extract_images(
-            body_el
-        )
-
-        return {
-            "url": post_url,
-            "status_id": status_id,
-            "feed_uid": feed_uid,
-            "author": author_name,
-            "time_text": time_text_clean,
-            "published_at": published_at,
-            "is_longtext": is_longtext,
-            "title": title,
-            "main_text": main_text,
-            "content_html": content_html,
-            "images": images,
-            "has_quote": has_quote,
-        }
-
-    def _fetch_detail(
-        self,
-        driver,
-        detail_url: str,
-    ) -> Optional[str]:
-
-        try:
-            driver.get(detail_url)
-
-            time.sleep(4)
-
-            html = driver.page_source
-
-            if (
-                not html
-                or "aliyun_waf" in html
-            ):
+            except Exception as exc:
                 self.logger.warning(
-                    f"WAF challenge on detail page "
-                    f"{detail_url}"
+                    "Failed to parse one "
+                    "Xueqiu status: "
+                    f"{exc}"
                 )
 
-                return None
-
-            return html
-
-        except Exception as e:
-            self.logger.warning(
-                f"Detail fetch failed for "
-                f"{detail_url}: {e}"
-            )
-
-            return None
-
-    def _enrich_with_detail(
-        self,
-        info: dict,
-        detail_html: str,
-    ) -> dict:
-
-        soup = BeautifulSoup(
-            detail_html,
-            "html.parser",
+        self.logger.info(
+            f"Built {len(articles)} "
+            "RSS articles"
         )
 
-        body = soup.select_one(
-            ".article__bd__detail"
-        )
-
-        if not body:
-            return info
-
-        title_el = soup.select_one(
-            ".article__bd__title"
-        )
-
-        if (
-            title_el
-            and not info.get("title")
-        ):
-            info["title"] = (
-                title_el.get_text(
-                    strip=True
-                )
-            )
-
-        info["content_html"] = (
-            _clean_for_rss(body)
-        )
-
-        info["images"] = (
-            _extract_images(body)
-            or info["images"]
-        )
-
-        return info
-
-    def _build_article(
-        self,
-        info: dict,
-    ) -> Article:
-
-        title = info.get("title")
-
-        if not title:
-            text = (
-                info.get("main_text")
-                or BeautifulSoup(
-                    info["content_html"],
-                    "html.parser",
-                ).get_text(
-                    " ",
-                    strip=True,
-                )
-            )
-
-            title = (
-                text[:60]
-                + (
-                    "…"
-                    if len(text) > 60
-                    else ""
-                )
-            )
-
-        if not title:
-            title = (
-                f"雪球动态 "
-                f"{info['status_id']}"
-            )
-
-        content_html = (
-            self._wrap_content(info)
-        )
-
-        return Article(
-            url=info["url"],
-            title=title,
-            published_at=info["published_at"],
-            content=content_html,
-            summary=None,
-            author=info["author"],
-            images=info["images"],
-            category="雪球",
-        )
-
-    def _wrap_content(
-        self,
-        info: dict,
-    ) -> str:
-
-        parts = [
-            '<div style="'
-            'font-size:16px;'
-            'line-height:1.8;'
-            'color:#333">'
-        ]
-
-        header_bits = []
-
-        if info.get("author"):
-            header_bits.append(
-                '<span style="'
-                'font-weight:600">'
-                f'{html_escape(info["author"])}'
-                '</span>'
-            )
-
-        if info.get("time_text"):
-            header_bits.append(
-                '<span style="'
-                'color:#888;'
-                'font-size:13px">'
-                f'{html_escape(info["time_text"])}'
-                '</span>'
-            )
-
-        if header_bits:
-            parts.append(
-                '<div style="'
-                'margin-bottom:12px;'
-                'padding-bottom:8px;'
-                'border-bottom:1px solid #eee">'
-                + " · ".join(header_bits)
-                + '</div>'
-            )
-
-        if (
-            info.get("is_longtext")
-            and info.get("title")
-        ):
-            parts.append(
-                '<h2 style="'
-                'font-size:20px;'
-                'margin:12px 0">'
-                f'{html_escape(info["title"])}'
-                '</h2>'
-            )
-
-        parts.append(
-            info["content_html"]
-        )
-
-        parts.append(
-            '<p style="margin-top:16px">'
-            f'<a href="{html_escape(info["url"])}" '
-            'style="color:#ff7d00">'
-            '在雪球查看 &rarr;'
-            '</a>'
-            '</p>'
-        )
-
-        parts.append("</div>")
-
-        return "\n".join(parts)
+        return articles
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description=(
-            "Generate Xueqiu User RSS"
+    parser = (
+        argparse.ArgumentParser(
+            description=(
+                "Generate Xueqiu "
+                "User RSS"
+            )
         )
     )
 
@@ -1185,9 +1042,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    gen = XueqiuUserGenerator()
+    generator = (
+        XueqiuUserGenerator()
+    )
 
-    gen.run(
+    generator.run(
         full_refresh=args.full,
         max_articles=args.max,
     )
