@@ -20,6 +20,10 @@ env:
   XUEQIU_USERS: ${{ vars.XUEQIU_USER_ID }}
   XUEQIU_MAX_POSTS: ${{ github.event.inputs.max_posts || '20' }}
 
+  COOKIECLOUD_URL: ${{ secrets.COOKIECLOUD_URL }}
+  COOKIECLOUD_UUID: ${{ secrets.COOKIECLOUD_UUID }}
+  COOKIECLOUD_PASSWORD: ${{ secrets.COOKIECLOUD_PASSWORD }}
+
 jobs:
   generate:
     runs-on: ubuntu-latest
@@ -50,6 +54,26 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          pip install pycryptodome
+
+      - name: Check CookieCloud configuration
+        run: |
+          if [ -z "$COOKIECLOUD_URL" ]; then
+            echo "COOKIECLOUD_URL is missing"
+            exit 1
+          fi
+
+          if [ -z "$COOKIECLOUD_UUID" ]; then
+            echo "COOKIECLOUD_UUID is missing"
+            exit 1
+          fi
+
+          if [ -z "$COOKIECLOUD_PASSWORD" ]; then
+            echo "COOKIECLOUD_PASSWORD is missing"
+            exit 1
+          fi
+
+          echo "CookieCloud configuration is present"
 
       - name: Remove old shared Xueqiu cache
         run: |
@@ -90,7 +114,6 @@ jobs:
             PUBLIC_FEED="feeds/xueqiu_${UID_VALUE}.xml"
             CACHE_FILE="cache/xueqiu_${UID_VALUE}.json"
 
-            # 防止上一次遗留的临时输出被误认为本次成功生成
             rm -f "$INTERNAL_FEED"
 
             python scripts/run_single.py xueqiu_user \
@@ -108,7 +131,6 @@ jobs:
               exit 1
             fi
 
-            # 保持你原来的公开 RSS 地址不变
             mv "$INTERNAL_FEED" "$PUBLIC_FEED"
 
             echo "Generated RSS:"
